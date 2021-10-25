@@ -1,3 +1,4 @@
+#![feature(is_symlink)]
 mod errors;
 
 use errors::{Res,error};
@@ -6,19 +7,20 @@ use serde::{Serialize,Deserialize};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::{File,DirEntry};
 use std::io::{BufReader,BufWriter};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path,PathBuf};
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
+    dev:u64,
     entries:BTreeMap<OsString,Entry>
 }
 
 impl Directory {
-    pub fn new()->Self {
-	Self{ entries:BTreeMap::new() }
+    pub fn new(dev:u64)->Self {
+	Self{ dev,entries:BTreeMap::new() }
     }
 
     pub fn insert(&mut self,name:OsString,entry:Entry) {
@@ -30,6 +32,7 @@ impl Directory {
 pub enum Entry {
     Dir(Directory),
     File(u64),
+    Symlink(OsString),
     Other(u64),
     Error(String)
 }
@@ -51,6 +54,10 @@ impl Device {
     pub fn insert_inode(&mut self,ino:u64,fi:FileInfo) {
 	self.inodes.insert(ino,fi);
     }
+
+    pub fn get_inode(&self,ino:u64)->&FileInfo {
+	self.inodes.get(&ino).expect("Cannot find inode")
+    }
 }
 
 #[derive(Debug,Serialize,Deserialize)]
@@ -61,7 +68,7 @@ pub struct Mounts {
 #[derive(Debug,Serialize,Deserialize)]
 pub struct FileSystem {
     mounts:Mounts,
-    tree:Entry
+    root:Directory
 }
 
 impl FileSystem {
@@ -78,6 +85,40 @@ impl FileSystem {
         self.serialize(&mut rmp_serde::Serializer::new(&mut buf))?;
         Ok(())
     }
+
+    pub fn dump(&self) {
+	self.dump_dir(&self.root,0);
+    }
+
+    fn put_indent(indent:usize) {
+	for _ in 0..indent {
+	    print!("  ");
+	}
+    }
+
+    pub fn dump_dir(&self,dir:&Directory,indent:usize) {
+	for (name,entry) in dir.entries.iter() {
+	    self.dump_dev(name,dir.dev,entry,indent + 1);
+	}
+    }
+
+    pub fn dump_dev(&self,name:&OsString,dev:u64,entry:&Entry,indent:usize) {
+	Self::put_indent(indent);
+	print!("{:?}",name);
+	match entry {
+	    &Entry::File(ino) => {
+		let fi = self.mounts.get_device(dev).get_inode(ino);
+		println!(" SIZE={}",fi.size);
+	    },
+	    Entry::Dir(dir) => {
+		println!(" DIR");
+		self.dump_dir(dir,indent + 1);
+	    },
+	    Entry::Symlink(sl) => println!(" -> {:?}",sl),
+	    Entry::Other(ino) => println!(" OTHER {}",ino),
+	    Entry::Error(err) => println!(" ERROR {}",err)
+	}
+    }
 }
 
 impl Mounts {
@@ -92,9 +133,13 @@ impl Mounts {
 	self.devices.insert(dev,Device::new());
     }
 
-    pub fn get_device(&mut self,dev:u64)->&mut Device {
+    pub fn get_device_mut(&mut self,dev:u64)->&mut Device {
 	self.ensure_device(dev);
 	self.devices.get_mut(&dev).unwrap()
+    }
+
+    pub fn get_device(&self,dev:u64)->&Device {
+	self.devices.get(&dev).unwrap()
     }
 }
 
@@ -106,55 +151,64 @@ pub struct FileInfo {
     pub created:i64,
 }
 
-fn scan<P:AsRef<Path>+std::fmt::Debug>(mounts:&mut Mounts,path:P)->Res<Entry> {
-    let mut dir = Directory::new();
-    println!(">> {:?}",path);
-    match std::fs::read_dir(&path) {
-	Ok(rd) => {
-	    for entry in rd {
-		match entry {
-		    Ok(e) => {
-			let name = e.file_name();
-			match e.metadata() {
-			    Ok(md) => {
-				let dev = md.dev();
-				let d = mounts.get_device(dev);
-				let ino = md.ino();
-				if !d.has_inode(ino) {
-				    let fi = FileInfo{
-					size:md.size(),
-					modified:md.mtime(),
-					accessed:md.atime(),
-					created:md.ctime()
-				    };
-				    d.insert_inode(ino,fi);
-				}
-				let ent =
-				    if md.is_dir() {
-					let mut sub_path = PathBuf::new();
-					sub_path.push(&path);
-					sub_path.push(&name);
-					scan(mounts,sub_path)?
-				    } else {
-					if md.is_file() {
-					    Entry::File(ino)
-					} else {
-					    Entry::Other(ino)
-					}
-				    };
-				dir.insert(name,ent);
-			    },
-			    Err(err) => {
-				eprintln!("Error getting metadata on {:?}: {:?}",name,err);
-			    }
+fn scan_entry(mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
+    let name = e.file_name();
+    let md = e.metadata()?;
+    let dev = md.dev();
+    let d = mounts.get_device_mut(dev);
+    let ino = md.ino();
+    if !d.has_inode(ino) {
+	let fi = FileInfo{
+	    size:md.size(),
+	    modified:md.mtime(),
+	    accessed:md.atime(),
+	    created:md.ctime()
+	};
+	d.insert_inode(ino,fi);
+    }
+    let ent =
+	if md.is_dir() {
+	    let mut sub_path = PathBuf::new();
+	    sub_path.push(&path);
+	    sub_path.push(&name);
+	    scan(mounts,&sub_path)?
+	} else {
+	    if md.is_file() {
+		Entry::File(ino)
+	    } else if md.is_symlink() {
+		let pb = e.path().read_link()?;
+		Entry::Symlink(pb.as_os_str().to_os_string())
+	    } else {
+		Entry::Other(ino)
+	    }
+	};
+    Ok((ent,name))
+}
+
+fn scan(mounts:&mut Mounts,path:&Path)->Res<Entry> {
+    match path.symlink_metadata() {
+	Ok(md) => {
+	    let dev = md.dev();
+	    let mut dir = Directory::new(dev);
+	    println!(">> {:?}",path);
+	    match std::fs::read_dir(&path) {
+		Ok(rd) => {
+		    for entry in rd {
+			match entry {
+			    Ok(e) =>
+				match scan_entry(mounts,path,&e) {
+				    Ok((ent,name)) => dir.insert(name,ent),
+				    Err(e) => eprintln!("Error scanning entry: {}",e)
+				},
+			    Err(e) => eprintln!("Error reading entry: {}",e)
 			}
-		    },
-		    Err(err) => {
-			eprintln!("Error: {:?}",err);
 		    }
+		    Ok(Entry::Dir(dir))
+		},
+		Err(e) => {
+		    Ok(Entry::Error(e.to_string()))
 		}
 	    }
-	    Ok(Entry::Dir(dir))
 	},
 	Err(e) => {
 	    Ok(Entry::Error(e.to_string()))
@@ -163,14 +217,19 @@ fn scan<P:AsRef<Path>+std::fmt::Debug>(mounts:&mut Mounts,path:P)->Res<Entry> {
 }
 
 fn collect(mut pargs:Arguments)->Res<()> {
-    let path : OsString = pargs.value_from_str("--path")?;
+    let path_os : OsString = pargs.value_from_str("--path")?;
     let out : OsString = pargs.value_from_str("--out")?;
     let mut mounts = Mounts::new();
-    let tree = scan(&mut mounts,path)?;
-    let fs = FileSystem{
-	mounts,
-	tree
-    };
+    let path = Path::new(&path_os);
+    let fs =
+	match scan(&mut mounts,&path)? {
+	    Entry::Dir(root) =>
+		FileSystem{
+		    mounts,
+		    root
+		},
+	    _ => return Err(error("Not a directory"))
+	};
     fs.save_to_file(out)?;
     Ok(())
 }
@@ -178,7 +237,8 @@ fn collect(mut pargs:Arguments)->Res<()> {
 fn dump(mut pargs:Arguments)->Res<()> {
     let input : OsString = pargs.value_from_str("--in")?;
     let fs = FileSystem::from_file(input)?;
-    println!("{:#?}",fs);
+    // println!("{:#?}",fs);
+    fs.dump();
     Ok(())
 }
 
