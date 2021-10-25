@@ -11,6 +11,7 @@ use std::fs::{File,DirEntry};
 use std::io::{BufReader,BufWriter,Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path,PathBuf};
+use regex::Regex;
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
@@ -323,12 +324,69 @@ fn dump(mut pargs:Arguments)->Res<()> {
     Ok(())
 }
 
+fn do_find_dir(fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path)->Res<()> {
+    for (name,entry) in dir.entries.iter() {
+	let namel = name.to_string_lossy();
+	if re.is_match(&namel) {
+	    let mut pb = PathBuf::from(path);
+	    pb.push(name);
+	    let u = pb.as_os_str().to_string_lossy();
+	    println!("{}",u);
+	}
+	match entry {
+	    Entry::Dir(dir) => {
+		let mut pb = PathBuf::from(path);
+		pb.push(name);
+		do_find_dir(fs,dir,re,&pb)?;
+	    },
+	    _ => ()
+	}
+    }
+    Ok(())
+}
+
+fn do_find(fs:&FileSystem,pat:&str)->Res<()> {
+    let re = Regex::new(pat)?;
+    let path = Path::new("/");
+    do_find_dir(fs,&fs.root,&re,&path)?;
+    Ok(())
+}
+
+fn examine(mut pargs:Arguments)->Res<()> {
+    let input : OsString = pargs.value_from_str("--in")?;
+    let fs = FileSystem::from_file(input)?;
+    let mut buf = String::new();
+    loop {
+	print!("> ");
+	std::io::stdout().flush()?;
+	buf.clear();
+	let n = std::io::stdin().read_line(&mut buf)?;
+	if n == 0 {
+	    break;
+	}
+	let us : Vec<&str> = buf.split_ascii_whitespace().collect();
+	let res =
+	    match &us[..] {
+		["find",pat] => do_find(&fs,pat),
+		[] => Ok(()),
+		_ => Err(error("Unknown command"))
+	    };
+	match res {
+	    Ok(()) => (),
+	    Err(e) => println!("ERROR: {}",e)
+	}
+    }
+    Ok(())
+}
+
 fn main()->Res<()> {
     let mut pargs = Arguments::from_env();
     if pargs.contains("--collect") {
 	collect(pargs)
     } else if pargs.contains("--dump") {
 	dump(pargs)
+    } else if pargs.contains("--examine") {
+	examine(pargs)
     } else {
 	Err(error("Bad arguments"))
     }
