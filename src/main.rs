@@ -16,16 +16,16 @@ use regex::Regex;
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
     dev:u64,
-    entries:BTreeMap<OsString,Entry>
+    entries:Vec<(OsString,Entry)>
 }
 
 impl Directory {
     pub fn new(dev:u64)->Self {
-	Self{ dev,entries:BTreeMap::new() }
+	Self{ dev,entries:vec![] }
     }
 
     pub fn insert(&mut self,name:OsString,entry:Entry) {
-	self.entries.insert(name,entry);
+	self.entries.push((name,entry));
     }
 }
 
@@ -149,9 +149,7 @@ impl Mounts {
 #[derive(Debug,Serialize,Deserialize)]
 pub struct FileInfo {
     pub size:u64,
-    pub modified:i64,
-    pub accessed:i64,
-    pub created:i64,
+    pub time:i32
 }
 
 trait Watcher {
@@ -161,24 +159,24 @@ trait Watcher {
 
 fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
     let name = e.file_name();
+    let mut sub_path = PathBuf::new();
+    sub_path.push(&path);
+    sub_path.push(&name);
+    watcher.notify(&sub_path);
     let md = e.metadata()?;
     let dev = md.dev();
     let d = mounts.get_device_mut(dev);
     let ino = md.ino();
     if !d.has_inode(ino) {
+	let time = (md.mtime().max(md.atime()).max(md.ctime()) / 60) as i32;
 	let fi = FileInfo{
 	    size:md.size(),
-	    modified:md.mtime(),
-	    accessed:md.atime(),
-	    created:md.ctime()
+	    time
 	};
 	d.insert_inode(ino,fi);
     }
     let ent =
 	if md.is_dir() {
-	    let mut sub_path = PathBuf::new();
-	    sub_path.push(&path);
-	    sub_path.push(&name);
 	    scan(watcher,mounts,&sub_path)?
 	} else {
 	    if md.is_file() {
