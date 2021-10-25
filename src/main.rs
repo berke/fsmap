@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::ffi::OsString;
 use std::fs::{File,DirEntry};
-use std::io::{BufReader,BufWriter};
+use std::io::{BufReader,BufWriter,Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path,PathBuf};
 
@@ -151,7 +151,11 @@ pub struct FileInfo {
     pub created:i64,
 }
 
-fn scan_entry(mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
+trait Watcher {
+    fn notify(&mut self,path:&Path);
+}
+
+fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
     let name = e.file_name();
     let md = e.metadata()?;
     let dev = md.dev();
@@ -171,7 +175,7 @@ fn scan_entry(mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> 
 	    let mut sub_path = PathBuf::new();
 	    sub_path.push(&path);
 	    sub_path.push(&name);
-	    scan(mounts,&sub_path)?
+	    scan(watcher,mounts,&sub_path)?
 	} else {
 	    if md.is_file() {
 		Entry::File(ino)
@@ -185,18 +189,18 @@ fn scan_entry(mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> 
     Ok((ent,name))
 }
 
-fn scan(mounts:&mut Mounts,path:&Path)->Res<Entry> {
+fn scan<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path)->Res<Entry> {
     match path.symlink_metadata() {
 	Ok(md) => {
 	    let dev = md.dev();
 	    let mut dir = Directory::new(dev);
-	    println!(">> {:?}",path);
+	    watcher.notify(path);
 	    match std::fs::read_dir(&path) {
 		Ok(rd) => {
 		    for entry in rd {
 			match entry {
 			    Ok(e) =>
-				match scan_entry(mounts,path,&e) {
+				match scan_entry(watcher,mounts,path,&e) {
 				    Ok((ent,name)) => dir.insert(name,ent),
 				    Err(e) => eprintln!("Error scanning entry: {}",e)
 				},
@@ -216,13 +220,73 @@ fn scan(mounts:&mut Mounts,path:&Path)->Res<Entry> {
     }
 }
 
+
+use std::time::Instant;
+
+struct Valve {
+    pub mask:u64,
+    last:Instant,
+    threshold:f64
+}
+
+impl Valve {
+    pub fn new(threshold:f64)->Self {
+	Self{
+	    mask:1,
+	    last:Instant::now(),
+	    threshold
+	}
+    }
+
+    pub fn tick(&mut self) {
+	let now = Instant::now();
+	let dur = now.duration_since(self.last);
+	let dt = dur.as_secs_f64();
+	if dt > 2.0 * self.threshold {
+	    self.mask >>= 1;
+	} else if dt < self.threshold / 2.0 {
+	    self.mask = self.mask.wrapping_shl(1) | 1;
+	}
+	self.last = now;
+    }
+}
+
+struct Counter {
+    count:u64,
+    valve:Valve
+}
+
+impl Counter {
+    pub fn new()->Self {
+	Self{ count:0,valve:Valve::new(0.1) }
+    }
+}
+
+impl Watcher for Counter {
+    fn notify(&mut self,path:&Path) {
+	self.count += 1;
+	if self.count & self.valve.mask == 0 {
+	    self.valve.tick();
+	    print!("\r{:8} {:?}\x1b[K",self.count,path);
+	    std::io::stdout().flush().unwrap();
+	}
+    }
+}
+
+impl Drop for Counter {
+    fn drop(&mut self) {
+	println!("Total: {}\x1b[K",self.count);
+    }
+}
+
 fn collect(mut pargs:Arguments)->Res<()> {
     let path_os : OsString = pargs.value_from_str("--path")?;
     let out : OsString = pargs.value_from_str("--out")?;
     let mut mounts = Mounts::new();
     let path = Path::new(&path_os);
+    let mut counter = Counter::new();
     let fs =
-	match scan(&mut mounts,&path)? {
+	match scan(&mut counter,&mut mounts,&path)? {
 	    Entry::Dir(root) =>
 		FileSystem{
 		    mounts,
