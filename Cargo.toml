@@ -1,0 +1,10 @@
+[package]
+name = "slurp"
+version = "0.1.0"
+authors = ["Berke Durak <bd@exhrd.fr>"]
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+rmp-serde = { version = "^0.15" }
+pico-args = { version = "^0.4.1" }
