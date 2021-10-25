@@ -103,15 +103,17 @@ impl FileSystem {
     }
 
     pub fn dump_dev(&self,name:&OsString,dev:u64,entry:&Entry,indent:usize) {
-	Self::put_indent(indent);
-	print!("{:?}",name);
 	match entry {
 	    &Entry::File(ino) => {
 		let fi = self.mounts.get_device(dev).get_inode(ino);
-		println!(" SIZE={}",fi.size);
+		print!("{:10} ",fi.size);
+		Self::put_indent(indent);
+		println!("{}",name.to_string_lossy());
 	    },
 	    Entry::Dir(dir) => {
-		println!(" DIR");
+		print!("{:10} ","DIR");
+		Self::put_indent(indent);
+		println!("{}",name.to_string_lossy());
 		self.dump_dir(dir,indent + 1);
 	    },
 	    Entry::Symlink(sl) => println!(" -> {:?}",sl),
@@ -153,6 +155,7 @@ pub struct FileInfo {
 
 trait Watcher {
     fn notify(&mut self,path:&Path);
+    fn error(&mut self,path:&Path);
 }
 
 fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
@@ -202,19 +205,21 @@ fn scan<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path)->Res<Entry> {
 			    Ok(e) =>
 				match scan_entry(watcher,mounts,path,&e) {
 				    Ok((ent,name)) => dir.insert(name,ent),
-				    Err(e) => eprintln!("Error scanning entry: {}",e)
+				    Err(_) => watcher.error(path)
 				},
-			    Err(e) => eprintln!("Error reading entry: {}",e)
+			    Err(_) => watcher.error(path)
 			}
 		    }
 		    Ok(Entry::Dir(dir))
 		},
 		Err(e) => {
+		    watcher.error(path);
 		    Ok(Entry::Error(e.to_string()))
 		}
 	    }
 	},
 	Err(e) => {
+	    watcher.error(path);
 	    Ok(Entry::Error(e.to_string()))
 	}
     }
@@ -252,30 +257,43 @@ impl Valve {
 }
 
 struct Counter {
+    total:u64,
+    errors:u64,
     count:u64,
     valve:Valve
 }
 
 impl Counter {
     pub fn new()->Self {
-	Self{ count:0,valve:Valve::new(0.1) }
+	Self{ total:0,errors:0,count:0,valve:Valve::new(0.1) }
     }
-}
 
-impl Watcher for Counter {
-    fn notify(&mut self,path:&Path) {
+    fn tick(&mut self,path:&Path) {
 	self.count += 1;
 	if self.count & self.valve.mask == 0 {
 	    self.valve.tick();
-	    print!("\r{:8} {:?}\x1b[K",self.count,path);
+	    let u = path.to_string_lossy();
+	    print!("\r{:8} {:8} {}\x1b[K",self.total,self.errors,u);
 	    std::io::stdout().flush().unwrap();
 	}
     }
 }
 
+impl Watcher for Counter {
+    fn notify(&mut self,path:&Path) {
+	self.total += 1;
+	self.tick(path);
+    }
+
+    fn error(&mut self,path:&Path) {
+	self.errors += 1;
+	self.tick(path);
+    }
+}
+
 impl Drop for Counter {
     fn drop(&mut self) {
-	println!("Total: {}\x1b[K",self.count);
+	println!("\nTotal: {}, errors: {}\x1b[K",self.total,self.errors);
     }
 }
 
@@ -301,7 +319,6 @@ fn collect(mut pargs:Arguments)->Res<()> {
 fn dump(mut pargs:Arguments)->Res<()> {
     let input : OsString = pargs.value_from_str("--in")?;
     let fs = FileSystem::from_file(input)?;
-    // println!("{:#?}",fs);
     fs.dump();
     Ok(())
 }
