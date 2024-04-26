@@ -72,6 +72,7 @@ pub struct FileSystem {
 
 impl FileSystem {
     pub fn from_file<P:AsRef<Path>>(path:P)->Result<Self> {
+	println!("Loading {:?}...",path.as_ref());
         let fd = File::open(path)?;
         let mut buf = BufReader::new(fd);
         let fps : Self = rmp_serde::decode::from_read(&mut buf)?;
@@ -359,8 +360,8 @@ fn do_find_multi(fss:&[(OsString,FileSystem)],pat:&str,limit:&mut usize,case:boo
     Ok(())
 }
 
-fn examine(mut pargs:Arguments)->Result<()> {
-    let inputs : Vec<OsString> = pargs.values_from_str("--in")?;
+fn examine(args:Arguments)->Result<()> {
+    let inputs = args.finish();
     let fs : Vec<(OsString,FileSystem)> =
 	inputs
 	.iter()
