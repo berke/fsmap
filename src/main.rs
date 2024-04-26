@@ -280,8 +280,8 @@ impl<W> Scanner<W> where W:Watcher {
 	match path.symlink_metadata() {
 	    Ok(md) => {
 		let dev = md.dev();
-		if !(self.one_device &&
-		     self.device.map(|dev2| dev == dev2).unwrap_or(true)) {
+		if self.one_device &&
+		     self.device.map(|dev2| dev != dev2).unwrap_or(false) {
 		    return Ok(Entry::Error(
 			format!("Skip dev {} {:?}",dev,path)));
 		}
