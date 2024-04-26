@@ -16,6 +16,6 @@ rmp-serde = { version = "^0.15" }
 pico-args = { version = "^0.5" }
 regex = { version = "^1" }
 rustyline = { version = "^14.0.0" }
-libc = { version = "*" }
+libc = { version = "0.2" }
 log = { version = "0.4.21",features = ["std"] }
 env_logger = { version = "0.11",default-features = false,features = ["auto-color","humantime"] }
