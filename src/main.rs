@@ -1,17 +1,15 @@
-#![feature(is_symlink)]
-mod errors;
-
-use errors::{Res,error};
+// #![feature(is_symlink)]
+use anyhow::{Result,anyhow,bail};
+// use errors::{Res,error};
 use pico_args::Arguments;
 use serde::{Serialize,Deserialize};
 use std::collections::BTreeMap;
-use std::error::Error;
 use std::ffi::OsString;
 use std::fs::{File,DirEntry};
 use std::io::{BufReader,BufWriter,Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path,PathBuf};
-use regex::Regex;
+use regex::{Regex,RegexBuilder};
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
@@ -73,14 +71,14 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
-    pub fn from_file<P:AsRef<Path>>(path:P)->Result<Self,Box<dyn Error>> {
+    pub fn from_file<P:AsRef<Path>>(path:P)->Result<Self> {
         let fd = File::open(path)?;
         let mut buf = BufReader::new(fd);
         let fps : Self = rmp_serde::decode::from_read(&mut buf)?;
         Ok(fps)
     }
 
-    pub fn save_to_file<P:AsRef<Path>>(&self,path:P)->Result<(),Box<dyn Error>> {
+    pub fn save_to_file<P:AsRef<Path>>(&self,path:P)->Result<()> {
         let fd = File::create(path)?;
         let mut buf = BufWriter::new(fd);
         self.serialize(&mut rmp_serde::Serializer::new(&mut buf))?;
@@ -107,7 +105,7 @@ impl FileSystem {
 	match entry {
 	    &Entry::File(ino) => {
 		let fi = self.mounts.get_device(dev).get_inode(ino);
-		print!("{:10} ",fi.size);
+		print!("{:10} {:10} ",fi.size,fi.time);
 		Self::put_indent(indent);
 		println!("{}",name.to_string_lossy());
 	    },
@@ -157,7 +155,7 @@ trait Watcher {
     fn error(&mut self,path:&Path);
 }
 
-fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Res<(Entry,OsString)> {
+fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Result<(Entry,OsString)> {
     let name = e.file_name();
     let mut sub_path = PathBuf::new();
     sub_path.push(&path);
@@ -191,7 +189,7 @@ fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntr
     Ok((ent,name))
 }
 
-fn scan<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path)->Res<Entry> {
+fn scan<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path)->Result<Entry> {
     match path.symlink_metadata() {
 	Ok(md) => {
 	    let dev = md.dev();
@@ -296,7 +294,7 @@ impl Drop for Counter {
     }
 }
 
-fn collect(mut pargs:Arguments)->Res<()> {
+fn collect(mut pargs:Arguments)->Result<()> {
     let path_os : OsString = pargs.value_from_str("--path")?;
     let out : OsString = pargs.value_from_str("--out")?;
     let mut mounts = Mounts::new();
@@ -309,33 +307,36 @@ fn collect(mut pargs:Arguments)->Res<()> {
 		    mounts,
 		    root
 		},
-	    _ => return Err(error("Not a directory"))
+	    _ => bail!("Not a directory")
 	};
     fs.save_to_file(out)?;
     Ok(())
 }
 
-fn dump(mut pargs:Arguments)->Res<()> {
+fn dump(mut pargs:Arguments)->Result<()> {
     let input : OsString = pargs.value_from_str("--in")?;
     let fs = FileSystem::from_file(input)?;
     fs.dump();
     Ok(())
 }
 
-fn do_find_dir(fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path)->Res<()> {
+fn do_find_dir(fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path,limit:&mut usize)->Result<()> {
     for (name,entry) in dir.entries.iter() {
-	let namel = name.to_string_lossy();
-	if re.is_match(&namel) {
-	    let mut pb = PathBuf::from(path);
-	    pb.push(name);
-	    let u = pb.as_os_str().to_string_lossy();
+	if *limit == 0 {
+	    return Ok(());
+	}
+	let mut pb = PathBuf::from(path);
+	pb.push(name);
+	let u = pb.as_os_str().to_string_lossy();
+	if re.is_match(&u) {
 	    println!("{}",u);
+	    *limit -= 1;
 	}
 	match entry {
 	    Entry::Dir(dir) => {
 		let mut pb = PathBuf::from(path);
 		pb.push(name);
-		do_find_dir(fs,dir,re,&pb)?;
+		do_find_dir(fs,dir,re,&pb,limit)?;
 	    },
 	    _ => ()
 	}
@@ -343,16 +344,29 @@ fn do_find_dir(fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path)->Res<()> {
     Ok(())
 }
 
-fn do_find(fs:&FileSystem,pat:&str)->Res<()> {
-    let re = Regex::new(pat)?;
+fn do_find(fs:&FileSystem,pat:&str,limit:&mut usize,case:bool)->Result<()> {
+    let re = RegexBuilder::new(pat).case_insensitive(case).build()?;
     let path = Path::new("/");
-    do_find_dir(fs,&fs.root,&re,&path)?;
+    do_find_dir(fs,&fs.root,&re,&path,limit)?;
     Ok(())
 }
 
-fn examine(mut pargs:Arguments)->Res<()> {
-    let input : OsString = pargs.value_from_str("--in")?;
-    let fs = FileSystem::from_file(input)?;
+fn do_find_multi(fss:&[(OsString,FileSystem)],pat:&str,limit:&mut usize,case:bool)->Result<()> {
+    for (path,fs) in fss.iter() {
+	println!("{:?}:",path);
+	do_find(fs,pat,limit,case)?;
+    }
+    Ok(())
+}
+
+fn examine(mut pargs:Arguments)->Result<()> {
+    let inputs : Vec<OsString> = pargs.values_from_str("--in")?;
+    let fs : Vec<(OsString,FileSystem)> =
+	inputs
+	.iter()
+	.map(|path| FileSystem::from_file(path).map(|fs| (path.clone(),fs)))
+	.flatten()
+	.collect();
     let mut buf = String::new();
     loop {
 	print!("> ");
@@ -365,9 +379,12 @@ fn examine(mut pargs:Arguments)->Res<()> {
 	let us : Vec<&str> = buf.split_ascii_whitespace().collect();
 	let res =
 	    match &us[..] {
-		["find",pat] => do_find(&fs,pat),
+		[cmd@("find"|"findi"),limit,pat] => {
+		    let mut limit : usize = limit.parse()?;
+		    do_find_multi(&fs,pat,&mut limit,*cmd == "findi")
+		},
 		[] => Ok(()),
-		_ => Err(error("Unknown command"))
+		_ => Err(anyhow!("Unknown command"))
 	    };
 	match res {
 	    Ok(()) => (),
@@ -377,15 +394,31 @@ fn examine(mut pargs:Arguments)->Res<()> {
     Ok(())
 }
 
-fn main()->Res<()> {
-    let mut pargs = Arguments::from_env();
-    if pargs.contains("--collect") {
-	collect(pargs)
-    } else if pargs.contains("--dump") {
-	dump(pargs)
-    } else if pargs.contains("--examine") {
-	examine(pargs)
-    } else {
-	Err(error("Bad arguments"))
-    }
+fn main()->Result<()> {
+    let mut args = Arguments::from_env();
+    // match args.subcommand()
+    // if pargs.contains("--collect") {
+    // 	collect(pargs)
+    // } else if pargs.contains("--dump") {
+    // 	dump(pargs)
+    // } else if pargs.contains("--examine") {
+    // 	examine(pargs)
+    // } else {
+    // 	Err(error("Bad arguments"))
+    // }
+    let cmds : &[(&str,Box<dyn Fn(Arguments)->Result<()>>)] = &[
+	("collect",Box::new(collect)),
+	("dump",Box::new(dump)),
+	("examine",Box::new(examine)),
+    ];
+
+    match args.subcommand()?
+	.and_then(|s| cmds.iter().find(|&(name,_)| name == &s.as_str())) {
+	    None => {
+		bail!("Specify subcommand (one of {:?})",
+		      cmds.iter().map(|&(name,_)| name).collect::<Vec<&str>>()
+		)
+	    },
+	    Some((_,f)) => f(args)
+	}
 }
