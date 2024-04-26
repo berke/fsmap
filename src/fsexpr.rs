@@ -2,13 +2,13 @@ use anyhow::{bail,Result};
 use regex::Regex;
 
 #[derive(Debug,Clone)]
-pub enum Expr {
+pub enum Expr<T> {
     True,
     False,
-    Match(Regex),
-    And(Box<Expr>,Box<Expr>),
-    Or(Box<Expr>,Box<Expr>),
-    Diff(Box<Expr>,Box<Expr>),
+    Atom(T),
+    And(Box<Expr<T>>,Box<Expr<T>>),
+    Or(Box<Expr<T>>,Box<Expr<T>>),
+    Diff(Box<Expr<T>>,Box<Expr<T>>),
 }
 
 #[derive(Debug,Clone)]
@@ -24,7 +24,30 @@ pub enum Token {
     Eof
 }
 
-impl Expr {
+pub trait Predicate {
+    fn test(&self,path:&str)->bool;
+}
+
+impl<T> Expr<T> {
+    fn eval<F:Fn(&T)->bool>(&self,f:&F)->bool {
+	match self {
+	    Self::True => true,
+	    Self::False => false,
+	    Self::Atom(a) => f(a),
+	    Self::And(x,y) => x.eval(f) && y.eval(f),
+	    Self::Or(x,y) => x.eval(f) || y.eval(f),
+	    Self::Diff(x,y) => x.eval(f) && !y.eval(f)
+	}
+    }
+}
+
+impl Predicate for Expr<Regex> {
+    fn test(&self,u:&str)->bool {
+	self.eval(&|re:&Regex| re.is_match(u))
+    }
+}
+
+impl Expr<Regex> {
     pub fn parse(u:&str)->Result<Self> {
 	let toks = Token::tokenize(u)?;
 	Self::parse_from_tokens(&toks[..])
@@ -43,7 +66,7 @@ impl Expr {
 	Self::eat_rest(rest,x)
     }
 
-    fn eat_rest(u:&[Token],x:Expr)->Result<(Self,&[Token])> {
+    fn eat_rest(u:&[Token],x:Self)->Result<(Self,&[Token])> {
 	match u {
 	    [Token::Diff,rest @ ..] => {
 		let (y,rest) = Self::eat_one(rest)?;
@@ -58,7 +81,7 @@ impl Expr {
 	}
     }
 
-    fn eat_and(u:&[Token],x:Expr)->Result<(Self,&[Token])> {
+    fn eat_and(u:&[Token],x:Self)->Result<(Self,&[Token])> {
 	let (y,rest) = Self::eat_one(u)?;
 	match rest {
 	    [Token::And,rest @ ..] => {
@@ -92,7 +115,7 @@ impl Expr {
 	    [Token::True,rest @ ..] => Ok((Expr::True,rest)),
 	    [Token::Str(u),rest @ ..] => {
 		let rex = Regex::new(u)?;
-		Ok((Expr::Match(rex),rest))
+		Ok((Expr::Atom(rex),rest))
 	    },
 	    [Token::LPar,rest @ ..] => {
 		let (x,rest) = Self::eat(rest)?;
@@ -110,8 +133,8 @@ impl Token {
     fn eat(u:&[char])->Result<(Self,&[char])> {
 	match u {
 	    [w,rest @ ..] if w.is_whitespace() => Self::eat(rest),
-	    // ['F',rest @ ..] => Ok((Self::False,rest)),
-	    // ['T',rest @ ..] => Ok((Self::True,rest)),
+	    ['%','f',rest @ ..] => Ok((Self::False,rest)),
+	    ['%','t',rest @ ..] => Ok((Self::True,rest)),
 	    ['&',rest @ ..] => Ok((Self::And,rest)),
 	    ['|',rest @ ..] => Ok((Self::Or,rest)),
 	    ['\\',rest @ ..] => Ok((Self::Diff,rest)),
@@ -196,8 +219,6 @@ fn test_tokenize() {
 #[test]
 fn test_parse() {
     for u in &[
-	// "/etc/passwd",
-	// "/etc/passwd | /etc/group",
 	"a",
 	"a | b",
 	"a | b | c",
@@ -219,8 +240,6 @@ fn test_parse() {
 	"a \\ b",
 	"a & b \\ c",
 	"a \\ b & c",
-	// " a | (b & c)",
-	// " a & (b | c)",
     ] {
 	let toks = Token::tokenize(u).unwrap();
 	let expr = Expr::parse_from_tokens(&toks[..]).unwrap();
