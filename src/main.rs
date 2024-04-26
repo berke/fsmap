@@ -1,15 +1,18 @@
-// #![feature(is_symlink)]
 use anyhow::{Result,anyhow,bail};
-// use errors::{Res,error};
 use pico_args::Arguments;
 use serde::{Serialize,Deserialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap};
 use std::ffi::OsString;
 use std::fs::{File,DirEntry};
 use std::io::{BufReader,BufWriter,Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path,PathBuf};
+use log::{self,info,warn,error,debug,trace};
 use regex::{Regex,RegexBuilder};
+
+mod sigint_detector;
+
+use sigint_detector::SigintDetector;
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
@@ -72,7 +75,7 @@ pub struct FileSystem {
 
 impl FileSystem {
     pub fn from_file<P:AsRef<Path>>(path:P)->Result<Self> {
-	println!("Loading {:?}...",path.as_ref());
+	info!("Loading {:?}...",path.as_ref());
         let fd = File::open(path)?;
         let mut buf = BufReader::new(fd);
         let fps : Self = rmp_serde::decode::from_read(&mut buf)?;
@@ -344,46 +347,95 @@ fn dump(mut pargs:Arguments)->Result<()> {
     Ok(())
 }
 
-fn do_find_dir(fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path,limit:&mut usize)->Result<()> {
-    for (name,entry) in dir.entries.iter() {
-	if *limit == 0 {
-	    return Ok(());
+struct Finder {
+    sd:SigintDetector
+}
+
+impl Finder {
+    fn do_find_dir(&mut self,
+		   fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path,
+		   limit:&mut usize)->Result<()> {
+	for (name,entry) in dir.entries.iter() {
+	    if *limit == 0 {
+		return Ok(());
+	    }
+	    if self.sd.interrupted() {
+		bail!("Interrupted");
+	    }
+	    let mut pb = PathBuf::from(path);
+	    pb.push(name);
+	    let u = pb.as_os_str().to_string_lossy();
+	    if re.is_match(&u) {
+		println!("{}",u);
+		*limit -= 1;
+	    }
+	    match entry {
+		Entry::Dir(dir) => {
+		    let mut pb = PathBuf::from(path);
+		    pb.push(name);
+		    self.do_find_dir(fs,dir,re,&pb,limit)?;
+		},
+		_ => ()
+	    }
 	}
-	let mut pb = PathBuf::from(path);
-	pb.push(name);
-	let u = pb.as_os_str().to_string_lossy();
-	if re.is_match(&u) {
-	    println!("{}",u);
-	    *limit -= 1;
+	Ok(())
+    }
+
+    fn do_find(&mut self,fs:&FileSystem,pat:&str,limit:&mut usize,case:bool)->Result<()> {
+	let re = RegexBuilder::new(pat).case_insensitive(case).build()?;
+	let path = Path::new("/");
+	self.do_find_dir(fs,&fs.root,&re,&path,limit)?;
+	Ok(())
+    }
+
+    fn do_find_multi(&mut self,fs:&[(OsString,FileSystem)],pat:&str,
+		     limit:&mut usize,case:bool)->Result<()> {
+	for (path,fs) in fs.iter() {
+	    println!("{:?}:",path);
+	    self.do_find(fs,pat,limit,case)?;
 	}
-	match entry {
-	    Entry::Dir(dir) => {
-		let mut pb = PathBuf::from(path);
-		pb.push(name);
-		do_find_dir(fs,dir,re,&pb,limit)?;
+	Ok(())
+    }
+
+    fn new(sd:SigintDetector)->Self {
+	Self { sd }
+    }
+}
+
+struct ExaminerCli {
+    fs:Vec<(OsString,FileSystem)>,
+    limit:usize
+}
+
+impl ExaminerCli {
+    pub fn new(fs:Vec<(OsString,FileSystem)>)->Self {
+	Self {
+	    fs,
+	    limit:1000
+	}
+    }
+
+    pub fn handle_input(&mut self,u:&str)->Result<bool> {
+	let sd = SigintDetector::new();
+	let us : Vec<&str> = u.split_ascii_whitespace().collect();
+	match &us[..] {
+	    [cmd@("find"|"findi"),pat] => {
+		let mut limit = self.limit;
+		let mut finder = Finder::new(sd);
+		finder.do_find_multi(&self.fs,
+					  pat,&mut limit,*cmd == "findi")?;
 	    },
-	    _ => ()
+	    ["limit",l] => self.limit = l.parse()?,
+	    ["quit"] => return Ok(true),
+	    [] => (),
+	    _ => return Err(anyhow!("Unknown command"))
 	}
+	Ok(false)
     }
-    Ok(())
-}
-
-fn do_find(fs:&FileSystem,pat:&str,limit:&mut usize,case:bool)->Result<()> {
-    let re = RegexBuilder::new(pat).case_insensitive(case).build()?;
-    let path = Path::new("/");
-    do_find_dir(fs,&fs.root,&re,&path,limit)?;
-    Ok(())
-}
-
-fn do_find_multi(fss:&[(OsString,FileSystem)],pat:&str,limit:&mut usize,case:bool)->Result<()> {
-    for (path,fs) in fss.iter() {
-	println!("{:?}:",path);
-	do_find(fs,pat,limit,case)?;
-    }
-    Ok(())
 }
 
 fn examine(args:Arguments)->Result<()> {
+    info!("Loading inputs");
     let inputs = args.finish();
     let fs : Vec<(OsString,FileSystem)> =
 	inputs
@@ -391,45 +443,33 @@ fn examine(args:Arguments)->Result<()> {
 	.map(|path| FileSystem::from_file(path).map(|fs| (path.clone(),fs)))
 	.flatten()
 	.collect();
-    let mut buf = String::new();
+    let mut cli = ExaminerCli::new(fs);
+
+    let config = rustyline::config::Config::builder()
+	.auto_add_history(true)
+	.build();
+    let mut rl : rustyline::Editor<(),_> = rustyline::Editor::with_config(config)?;
+    let _ = rl.load_history(".fsmap-hist");
+
     loop {
-	print!("> ");
-	std::io::stdout().flush()?;
-	buf.clear();
-	let n = std::io::stdin().read_line(&mut buf)?;
-	if n == 0 {
-	    break;
-	}
-	let us : Vec<&str> = buf.split_ascii_whitespace().collect();
-	let res =
-	    match &us[..] {
-		[cmd@("find"|"findi"),limit,pat] => {
-		    let mut limit : usize = limit.parse()?;
-		    do_find_multi(&fs,pat,&mut limit,*cmd == "findi")
-		},
-		[] => Ok(()),
-		_ => Err(anyhow!("Unknown command"))
-	    };
-	match res {
-	    Ok(()) => (),
-	    Err(e) => println!("ERROR: {}",e)
+	match rl.readline("> ")
+	    .map_err(|e| e.into())
+	    .and_then(|u| {
+		cli.handle_input(u.as_str())
+	    }) {
+		Ok(true) => break,
+		Ok(false) => (),
+		Err(e) => eprintln!("ERR: {}",e)
 	}
     }
-    Ok(())
+
+    std::process::exit(0);
 }
 
 fn main()->Result<()> {
     let mut args = Arguments::from_env();
-    // match args.subcommand()
-    // if pargs.contains("--collect") {
-    // 	collect(pargs)
-    // } else if pargs.contains("--dump") {
-    // 	dump(pargs)
-    // } else if pargs.contains("--examine") {
-    // 	examine(pargs)
-    // } else {
-    // 	Err(error("Bad arguments"))
-    // }
+    env_logger::Builder::from_env("FSMAP_LOG").init();
+
     let cmds : &[(&str,Box<dyn Fn(Arguments)->Result<()>>)] = &[
 	("collect",Box::new(collect)),
 	("dump",Box::new(dump)),
