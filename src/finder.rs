@@ -14,7 +14,7 @@ pub struct Finder {
 
 impl Finder {
     fn do_find_dir(&mut self,
-		   fs:&FileSystem,dir:&Directory,re:&Regex,path:&Path,
+		   dir:&Directory,re:&Regex,path:&Path,
 		   limit:&mut usize)->Result<()> {
 	for (name,entry) in dir.entries.iter() {
 	    if *limit == 0 {
@@ -30,13 +30,10 @@ impl Finder {
 		println!("{}",u);
 		*limit -= 1;
 	    }
-	    match entry {
-		Entry::Dir(dir) => {
-		    let mut pb = PathBuf::from(path);
-		    pb.push(name);
-		    self.do_find_dir(fs,dir,re,&pb,limit)?;
-		},
-		_ => ()
+	    if let Entry::Dir(dir) = entry {
+		let mut pb = PathBuf::from(path);
+		pb.push(name);
+		self.do_find_dir(dir,re,&pb,limit)?;
 	    }
 	}
 	Ok(())
@@ -45,7 +42,7 @@ impl Finder {
     fn do_find(&mut self,fs:&FileSystem,pat:&str,limit:&mut usize,case:bool)->Result<()> {
 	let re = RegexBuilder::new(pat).case_insensitive(case).build()?;
 	let path = Path::new("/");
-	self.do_find_dir(fs,&fs.root,&re,&path,limit)?;
+	self.do_find_dir(&fs.root,&re,path,limit)?;
 	Ok(())
     }
 

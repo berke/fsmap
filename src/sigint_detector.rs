@@ -8,8 +8,6 @@ extern "C" fn sigint_handler(_sig:std::ffi::c_int) {
     }
 }
 
-type SignalHandler = extern "C" fn(libc::c_int);
-
 pub struct SigintDetector {
     old:libc::sigaction
 }
@@ -20,8 +18,7 @@ impl SigintDetector {
 	    unsafe {
 		let mut sa_mask : libc::sigset_t = std::mem::zeroed();
 		libc::sigemptyset(&mut sa_mask);
-		let sa_sigaction : libc::size_t =
-		    std::mem::transmute::<SignalHandler,usize>(sigint_handler);
+		let sa_sigaction : libc::size_t = sigint_handler as libc::size_t;
 
 		let act = libc::sigaction {
 		    sa_sigaction,

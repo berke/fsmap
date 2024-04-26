@@ -26,7 +26,7 @@ fn collect(mut pargs:Arguments)->Result<()> {
     let counter = Counter::new();
     let mut scanner = Scanner::new(counter,one_device);
     let fs =
-	match scanner.scan(&mut mounts,&path)? {
+	match scanner.scan(&mut mounts,path)? {
 	    Entry::Dir(root) =>
 		FileSystem{
 		    mounts,
@@ -51,8 +51,7 @@ fn examine(args:Arguments)->Result<()> {
     let fs : Vec<(OsString,FileSystem)> =
 	inputs
 	.iter()
-	.map(|path| FileSystem::from_file(path).map(|fs| (path.clone(),fs)))
-	.flatten()
+	.flat_map(|path| FileSystem::from_file(path).map(|fs| (path.clone(),fs)))
 	.collect();
     let mut cli = ExaminerCli::new(fs);
 
@@ -80,7 +79,9 @@ fn main()->Result<()> {
     let mut args = Arguments::from_env();
     env_logger::Builder::from_env("FSMAP_LOG").init();
 
-    let cmds : &[(&str,Box<dyn Fn(Arguments)->Result<()>>)] = &[
+    type Command = Box<dyn Fn(Arguments)->Result<()>>;
+
+    let cmds : &[(&str,Command)] = &[
 	("collect",Box::new(collect)),
 	("dump",Box::new(dump)),
 	("examine",Box::new(examine)),

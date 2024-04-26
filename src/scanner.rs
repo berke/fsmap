@@ -31,7 +31,7 @@ impl<W> Scanner<W> where W:Watcher {
     fn scan_entry(&mut self,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Result<(Entry,OsString)> {
 	let name = e.file_name();
 	let mut sub_path = PathBuf::new();
-	sub_path.push(&path);
+	sub_path.push(path);
 	sub_path.push(&name);
 	self.watcher.notify(&sub_path);
 	let md = e.metadata()?;
@@ -49,15 +49,13 @@ impl<W> Scanner<W> where W:Watcher {
 	let ent =
 	    if md.is_dir() {
 		self.scan(mounts,&sub_path)?
+	    } else if md.is_file() {
+		Entry::File(ino)
+	    } else if md.is_symlink() {
+		let pb = e.path().read_link()?;
+		Entry::Symlink(pb.as_os_str().to_os_string())
 	    } else {
-		if md.is_file() {
-		    Entry::File(ino)
-		} else if md.is_symlink() {
-		    let pb = e.path().read_link()?;
-		    Entry::Symlink(pb.as_os_str().to_os_string())
-		} else {
-		    Entry::Other(ino)
-		}
+		Entry::Other(ino)
 	    };
 	Ok((ent,name))
     }
@@ -74,7 +72,7 @@ impl<W> Scanner<W> where W:Watcher {
 		self.device = Some(dev);
 		let mut dir = Directory::new(dev);
 		self.watcher.notify(path);
-		match std::fs::read_dir(&path) {
+		match std::fs::read_dir(path) {
 		    Ok(rd) => {
 			for entry in rd {
 			    match entry {
