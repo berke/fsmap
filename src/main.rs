@@ -6,6 +6,7 @@ use log::{self,info};
 
 mod counter;
 mod examiner_cli;
+mod fsexpr;
 mod finder;
 mod fsmap;
 mod scanner;
