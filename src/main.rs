@@ -92,7 +92,7 @@ impl FileSystem {
 
     fn put_indent(indent:usize) {
 	for _ in 0..indent {
-	    print!("  ");
+	    print!(" ");
 	}
     }
 
@@ -111,7 +111,7 @@ impl FileSystem {
 		println!("{}",name.to_string_lossy());
 	    },
 	    Entry::Dir(dir) => {
-		print!("{:10} ","DIR");
+		print!("{:21} ","DIR");
 		Self::put_indent(indent);
 		println!("{}",name.to_string_lossy());
 		self.dump_dir(dir,indent + 1);
@@ -151,78 +151,10 @@ pub struct FileInfo {
     pub time:i32
 }
 
-trait Watcher {
+pub trait Watcher {
     fn notify(&mut self,path:&Path);
     fn error(&mut self,path:&Path);
 }
-
-fn scan_entry<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Result<(Entry,OsString)> {
-    let name = e.file_name();
-    let mut sub_path = PathBuf::new();
-    sub_path.push(&path);
-    sub_path.push(&name);
-    watcher.notify(&sub_path);
-    let md = e.metadata()?;
-    let dev = md.dev();
-    let d = mounts.get_device_mut(dev);
-    let ino = md.ino();
-    if !d.has_inode(ino) {
-	let time = (md.mtime().max(md.atime()).max(md.ctime()) / 60) as i32;
-	let fi = FileInfo{
-	    size:md.size(),
-	    time
-	};
-	d.insert_inode(ino,fi);
-    }
-    let ent =
-	if md.is_dir() {
-	    scan(watcher,mounts,&sub_path)?
-	} else {
-	    if md.is_file() {
-		Entry::File(ino)
-	    } else if md.is_symlink() {
-		let pb = e.path().read_link()?;
-		Entry::Symlink(pb.as_os_str().to_os_string())
-	    } else {
-		Entry::Other(ino)
-	    }
-	};
-    Ok((ent,name))
-}
-
-fn scan<W:Watcher>(watcher:&mut W,mounts:&mut Mounts,path:&Path)->Result<Entry> {
-    match path.symlink_metadata() {
-	Ok(md) => {
-	    let dev = md.dev();
-	    let mut dir = Directory::new(dev);
-	    watcher.notify(path);
-	    match std::fs::read_dir(&path) {
-		Ok(rd) => {
-		    for entry in rd {
-			match entry {
-			    Ok(e) =>
-				match scan_entry(watcher,mounts,path,&e) {
-				    Ok((ent,name)) => dir.insert(name,ent),
-				    Err(_) => watcher.error(path)
-				},
-			    Err(_) => watcher.error(path)
-			}
-		    }
-		    Ok(Entry::Dir(dir))
-		},
-		Err(e) => {
-		    watcher.error(path);
-		    Ok(Entry::Error(e.to_string()))
-		}
-	    }
-	},
-	Err(e) => {
-	    watcher.error(path);
-	    Ok(Entry::Error(e.to_string()))
-	}
-    }
-}
-
 
 use std::time::Instant;
 
@@ -295,14 +227,105 @@ impl Drop for Counter {
     }
 }
 
+pub struct Scanner<W> {
+    watcher:W,
+    one_device:bool,
+    device:Option<u64>
+}
+
+impl<W> Scanner<W> where W:Watcher {
+    fn new(watcher:W,one_device:bool)->Self {
+	Self {
+	    watcher,
+	    one_device,
+	    device:None
+	}
+    }
+    
+    fn scan_entry(&mut self,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Result<(Entry,OsString)> {
+	let name = e.file_name();
+	let mut sub_path = PathBuf::new();
+	sub_path.push(&path);
+	sub_path.push(&name);
+	self.watcher.notify(&sub_path);
+	let md = e.metadata()?;
+	let dev = md.dev();
+	let d = mounts.get_device_mut(dev);
+	let ino = md.ino();
+	if !d.has_inode(ino) {
+	    let time = (md.mtime().max(md.atime()).max(md.ctime()) / 60) as i32;
+	    let fi = FileInfo{
+		size:md.size(),
+		time
+	    };
+	    d.insert_inode(ino,fi);
+	}
+	let ent =
+	    if md.is_dir() {
+		self.scan(mounts,&sub_path)?
+	    } else {
+		if md.is_file() {
+		    Entry::File(ino)
+		} else if md.is_symlink() {
+		    let pb = e.path().read_link()?;
+		    Entry::Symlink(pb.as_os_str().to_os_string())
+		} else {
+		    Entry::Other(ino)
+		}
+	    };
+	Ok((ent,name))
+    }
+
+    fn scan(&mut self,mounts:&mut Mounts,path:&Path)->Result<Entry> {
+	match path.symlink_metadata() {
+	    Ok(md) => {
+		let dev = md.dev();
+		if !(self.one_device &&
+		     self.device.map(|dev2| dev == dev2).unwrap_or(true)) {
+		    return Ok(Entry::Error(
+			format!("Skip dev {} {:?}",dev,path)));
+		}
+		self.device = Some(dev);
+		let mut dir = Directory::new(dev);
+		self.watcher.notify(path);
+		match std::fs::read_dir(&path) {
+		    Ok(rd) => {
+			for entry in rd {
+			    match entry {
+				Ok(e) =>
+				    match self.scan_entry(mounts,path,&e) {
+					Ok((ent,name)) => dir.insert(name,ent),
+					Err(_) => self.watcher.error(path)
+				    },
+				Err(_) => self.watcher.error(path)
+			    }
+			}
+			Ok(Entry::Dir(dir))
+		    },
+		    Err(e) => {
+			self.watcher.error(path);
+			Ok(Entry::Error(e.to_string()))
+		    }
+		}
+	    },
+	    Err(e) => {
+		self.watcher.error(path);
+		Ok(Entry::Error(e.to_string()))
+	    }
+	}
+    }
+}
+
 fn collect(mut pargs:Arguments)->Result<()> {
     let path_os : OsString = pargs.value_from_str("--path")?;
     let out : OsString = pargs.value_from_str("--out")?;
+    let one_device : bool = pargs.contains("--one-device");
     let mut mounts = Mounts::new();
     let path = Path::new(&path_os);
-    let mut counter = Counter::new();
+    let counter = Counter::new();
+    let mut scanner = Scanner::new(counter,one_device);
     let fs =
-	match scan(&mut counter,&mut mounts,&path)? {
+	match scanner.scan(&mut mounts,&path)? {
 	    Entry::Dir(root) =>
 		FileSystem{
 		    mounts,
