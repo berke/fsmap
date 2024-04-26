@@ -426,7 +426,10 @@ impl ExaminerCli {
 					  pat,&mut limit,*cmd == "findi")?;
 	    },
 	    ["limit",l] => self.limit = l.parse()?,
-	    ["quit"] => return Ok(true),
+	    ["quit"] => {
+		std::process::exit(0);
+		// return Ok(true);
+	    },
 	    [] => (),
 	    _ => return Err(anyhow!("Unknown command"))
 	}
@@ -462,8 +465,7 @@ fn examine(args:Arguments)->Result<()> {
 		Err(e) => eprintln!("ERR: {}",e)
 	}
     }
-
-    std::process::exit(0);
+    Ok(())
 }
 
 fn main()->Result<()> {

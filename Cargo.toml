@@ -10,3 +10,9 @@ serde = { version = "1.0", features = ["derive"] }
 rmp-serde = { version = "^0.15" }
 pico-args = { version = "^0.4.1" }
 regex = { version = "^1" }
+# linefeed = { version = "^0.6" }
+rustyline = { version = "^14.0.0" }
+signal-hook = { version = "^0.3.17" }
+libc = { version = "*" }
+log = { version = "0.4.21",features = ["std"] }
+env_logger = { version = "0.10",default-features = false,features = ["auto-color","humantime"] }
