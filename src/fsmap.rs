@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error,Result};
 use serde::{Serialize,Deserialize};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -6,7 +6,7 @@ use std::fs::{File,Metadata};
 use std::io::{BufReader,BufWriter};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use log::{self,info};
+use log::{self,error,info};
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Directory {
@@ -37,6 +37,17 @@ pub struct Mounts {
 pub struct FileSystem {
     pub mounts:Mounts,
     pub root:Directory
+}
+
+#[derive(Debug)]
+pub struct FileSystemEntry {
+    pub origin:OsString,
+    pub fs:FileSystem
+}
+
+#[derive(Debug)]
+pub struct FileSystems {
+    pub systems:Vec<FileSystemEntry>
 }
 
 #[derive(Debug,Serialize,Deserialize)]
@@ -123,5 +134,24 @@ impl FileSystem {
         let mut buf = BufWriter::new(fd);
         self.serialize(&mut rmp_serde::Serializer::new(&mut buf))?;
         Ok(())
+    }
+}
+
+impl FileSystems {
+    pub fn load_multiple<P:AsRef<Path>>(paths:&[P])->
+	(Self,Vec<(OsString,Error)>) {
+	let mut systems = Vec::new();
+	let mut errors = Vec::new();
+	for p in paths.iter() {
+	    let name = p.as_ref().as_os_str().to_os_string();
+	    match FileSystem::from_file(p) {
+		Ok(fs) => systems.push(FileSystemEntry { origin:name,fs }),
+		Err(e) => {
+		    error!("Error loading {:?}: {}",name,e);
+		    errors.push((name,e));
+		}
+	    }
+	}
+	(Self { systems },errors)
     }
 }

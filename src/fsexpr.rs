@@ -19,6 +19,7 @@ pub enum Token {
     Unsigned(u64),
     Date(FsDate),
     Str(String),
+    Drive,
     Name,
     Before,
     After,
@@ -55,7 +56,7 @@ impl FsDate {
 
 #[derive(Clone,Debug)]
 pub enum FsAtom {
-    // DirMatch(Regex),
+    Drive(u64),
     PathMatch(Regex),
     NameMatch(Regex),
     Before(i64),
@@ -65,6 +66,9 @@ pub enum FsAtom {
 }
 
 pub struct FsData<'a> {
+    // Drive ID
+    pub drive:u64,
+    
     // Base name
     pub name:&'a str,
     
@@ -98,6 +102,7 @@ impl<T> Expr<T> {
 impl FsAtom {
     pub fn eval(&self,data:&FsData)->bool {
 	match self {
+	    &Self::Drive(x) => data.drive == x,
 	    Self::PathMatch(rx) => rx.is_match(data.path),
 	    Self::NameMatch(rx) => rx.is_match(data.name),
 	    &Self::Smaller(x) => data.size <= x,
@@ -114,100 +119,6 @@ impl Predicate for Expr<FsAtom> {
     }
 }
 
-impl Expr<FsAtom> {
-    pub fn parse(u:&str)->Result<Self> {
-	let toks = Token::tokenize(u)?;
-	Self::parse_from_tokens(&toks[..])
-    }
-
-    fn parse_from_tokens(u:&[Token])->Result<Self> {
-	let (x,rest) = Self::eat(u)?;
-	match rest {
-	    [] => Ok(x),
-	    _ => bail!("Junk at end of expression")
-	}
-    }
-    
-    fn eat(u:&[Token])->Result<(Self,&[Token])> {
-	let (x,rest) = Self::eat_one(u)?;
-	Self::eat_rest(rest,x)
-    }
-
-    fn eat_one(u:&[Token])->Result<(Self,&[Token])> {
-	match u {
-	    [Token::False,rest @ ..] => Ok((Expr::False,rest)),
-	    [Token::True,rest @ ..] => Ok((Expr::True,rest)),
-	    [Token::Smaller,Token::Unsigned(x),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::Smaller(*x)),rest)),
-	    [Token::Larger,Token::Unsigned(x),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::Larger(*x)),rest)),
-	    [Token::Before,Token::Date(d),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::Before(d.to_timestamp()?)),rest)),
-	    [Token::After,Token::Date(d),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::After(d.to_timestamp()?)),rest)),
-	    [Token::Name,Token::Str(u),rest @ ..] => {
-		let rex = Regex::new(u)?;
-		Ok((Expr::Atom(FsAtom::NameMatch(rex)),rest))
-	    },
-	    [Token::Str(u),rest @ ..] => {
-		let rex = Regex::new(u)?;
-		Ok((Expr::Atom(FsAtom::PathMatch(rex)),rest))
-	    },
-	    [Token::LPar,rest @ ..] => {
-		let (x,rest) = Self::eat(rest)?;
-		match rest {
-		    [Token::RPar,rest @ ..] => Ok((x,rest)),
-		    _ => bail!("Expecting right parenthesis")
-		}
-	    },
-	    _ => bail!("Invalid syntax")
-	}
-    }
-
-    fn eat_rest(u:&[Token],x:Self)->Result<(Self,&[Token])> {
-	match u {
-	    [Token::Diff,rest @ ..] => {
-		let (y,rest) = Self::eat_one(rest)?;
-		Self::eat_rest(rest,Expr::Diff(Box::new(x),Box::new(y)))
-	    },
-	    [Token::And,rest @ ..] => Self::eat_and(rest,x),
-	    [Token::Or,rest @ ..] => {
-		let (y,rest) = Self::eat(rest)?;
-		Ok((Expr::Or(Box::new(x),Box::new(y)),rest))
-	    },
-	    _ => Ok((x,u)),
-	}
-    }
-
-    fn eat_and(u:&[Token],x:Self)->Result<(Self,&[Token])> {
-	let (y,rest) = Self::eat_one(u)?;
-	match rest {
-	    [Token::And,rest @ ..] => {
-		let e = Expr::And(Box::new(x),Box::new(y));
-		Self::eat_and(rest,e)}
-	    ,
-	    [Token::Diff,rest @ ..] => {
-		let (z,rest) = Self::eat_one(rest)?;
-		Ok((Expr::And(
-		    Box::new(x),
-		    Box::new(
-			Expr::Diff(Box::new(y),Box::new(z))
-		    )),
-		    rest))
-	    },
-	    [Token::Or,rest @ ..] => {
-		let e = Expr::And(Box::new(x),Box::new(y));
-		let (f,rest) = Self::eat(rest)?;
-		Ok((Expr::Or(Box::new(e),Box::new(f)),rest))
-	    },
-	    _ => {
-		let e = Expr::And(Box::new(x),Box::new(y));
-		Ok((e,rest))
-	    }
-	}
-    }
-}
-
 impl Token {
     fn eat(u:&[char])->Result<(Self,&[char])> {
 	match u {
@@ -216,13 +127,14 @@ impl Token {
 		let (kw,rest) = Self::eat_keyword(rest,String::new())?;
 		let kw =
 		    match kw.as_str() {
-			"t" => Self::True,
-			"f" => Self::False,
-			"name" => Self::Name,
-			"before" => Self::Before,
 			"after" => Self::After,
-			"smaller" => Self::Smaller,
+			"before" => Self::Before,
+			"drive" => Self::Drive,
+			"f" => Self::False,
 			"larger" => Self::Larger,
+			"name" => Self::Name,
+			"smaller" => Self::Smaller,
+			"t" => Self::True,
 			_ => bail!("Unknown keyword {:?}",kw)
 		    };
 		Ok((kw,rest))
@@ -350,6 +262,102 @@ impl Token {
 	    u = rest;
 	}
 	Ok(res)
+    }
+}
+
+impl Expr<FsAtom> {
+    pub fn parse(u:&str)->Result<Self> {
+	let toks = Token::tokenize(u)?;
+	Self::parse_from_tokens(&toks[..])
+    }
+
+    fn parse_from_tokens(u:&[Token])->Result<Self> {
+	let (x,rest) = Self::eat(u)?;
+	match rest {
+	    [] => Ok(x),
+	    _ => bail!("Junk at end of expression")
+	}
+    }
+    
+    fn eat(u:&[Token])->Result<(Self,&[Token])> {
+	let (x,rest) = Self::eat_one(u)?;
+	Self::eat_rest(rest,x)
+    }
+
+    fn eat_one(u:&[Token])->Result<(Self,&[Token])> {
+	match u {
+	    [Token::False,rest @ ..] => Ok((Expr::False,rest)),
+	    [Token::True,rest @ ..] => Ok((Expr::True,rest)),
+	    [Token::Drive,Token::Unsigned(x),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Drive(*x)),rest)),
+	    [Token::Smaller,Token::Unsigned(x),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Smaller(*x)),rest)),
+	    [Token::Larger,Token::Unsigned(x),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Larger(*x)),rest)),
+	    [Token::Before,Token::Date(d),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Before(d.to_timestamp()?)),rest)),
+	    [Token::After,Token::Date(d),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::After(d.to_timestamp()?)),rest)),
+	    [Token::Name,Token::Str(u),rest @ ..] => {
+		let rex = Regex::new(u)?;
+		Ok((Expr::Atom(FsAtom::NameMatch(rex)),rest))
+	    },
+	    [Token::Str(u),rest @ ..] => {
+		let rex = Regex::new(u)?;
+		Ok((Expr::Atom(FsAtom::PathMatch(rex)),rest))
+	    },
+	    [Token::LPar,rest @ ..] => {
+		let (x,rest) = Self::eat(rest)?;
+		match rest {
+		    [Token::RPar,rest @ ..] => Ok((x,rest)),
+		    _ => bail!("Expecting right parenthesis")
+		}
+	    },
+	    _ => bail!("Invalid syntax")
+	}
+    }
+
+    fn eat_rest(u:&[Token],x:Self)->Result<(Self,&[Token])> {
+	match u {
+	    [Token::Diff,rest @ ..] => {
+		let (y,rest) = Self::eat_one(rest)?;
+		Self::eat_rest(rest,Expr::Diff(Box::new(x),Box::new(y)))
+	    },
+	    [Token::And,rest @ ..] => Self::eat_and(rest,x),
+	    [Token::Or,rest @ ..] => {
+		let (y,rest) = Self::eat(rest)?;
+		Ok((Expr::Or(Box::new(x),Box::new(y)),rest))
+	    },
+	    _ => Ok((x,u)),
+	}
+    }
+
+    fn eat_and(u:&[Token],x:Self)->Result<(Self,&[Token])> {
+	let (y,rest) = Self::eat_one(u)?;
+	match rest {
+	    [Token::And,rest @ ..] => {
+		let e = Expr::And(Box::new(x),Box::new(y));
+		Self::eat_and(rest,e)}
+	    ,
+	    [Token::Diff,rest @ ..] => {
+		let (z,rest) = Self::eat_one(rest)?;
+		Ok((Expr::And(
+		    Box::new(x),
+		    Box::new(
+			Expr::Diff(Box::new(y),Box::new(z))
+		    )),
+		    rest))
+	    },
+	    [Token::Or,rest @ ..] => {
+		let e = Expr::And(Box::new(x),Box::new(y));
+		let (f,rest) = Self::eat(rest)?;
+		Ok((Expr::Or(Box::new(e),Box::new(f)),rest))
+	    },
+	    _ => {
+		let e = Expr::And(Box::new(x),Box::new(y));
+		Ok((e,rest))
+	    }
+	}
     }
 }
 

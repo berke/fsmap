@@ -12,8 +12,10 @@ use crate::{
 
 pub struct Dumper<'a,'b,'c,'d,P> {
     sd:&'a SigintDetector,
-    fs:&'b FileSystem,
+    fss:&'b FileSystems,
     pred:&'c P,
+    idrive:usize,
+    idrive_shown:Option<usize>,
     last_dir:PathBuf,
     dir:PathBuf,
     current:PathBuf,
@@ -30,11 +32,13 @@ pub enum IndentMode {
 }
 
 impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
-    pub fn new(sd:&'a SigintDetector,fs:&'b FileSystem,pred:&'c P)->Self {
+    pub fn new(sd:&'a SigintDetector,fss:&'b FileSystems,pred:&'c P)->Self {
 	Self {
-	    fs,
+	    fss,
 	    sd,
 	    pred,
+	    idrive:0,
+	    idrive_shown:None,
 	    current:PathBuf::new(),
 	    last_dir:PathBuf::new(),
 	    dir:PathBuf::new(),
@@ -47,7 +51,11 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
     }
 	
     pub fn dump(&mut self)->Result<()> {
-	self.dump_dir(&self.fs.root)
+	for (idrive,FileSystemEntry { fs,.. } ) in self.fss.systems.iter().enumerate() {
+	    self.idrive = idrive;
+	    self.dump_dir(&fs,&fs.root)?;
+	}
+	Ok(())
     }
 
     fn put_indent(&self,indent:usize) {
@@ -61,13 +69,13 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 	}
     }
 
-    fn dump_dir(&mut self,dir:&Directory)->Result<()> {
-	if let Some(device) = self.fs.mounts.get_device(dir.dev) {
+    fn dump_dir(&mut self,fs:&FileSystem,dir:&Directory)->Result<()> {
+	if let Some(device) = fs.mounts.get_device(dir.dev) {
 	    for (name,entry) in dir.entries.iter() {
 		if self.sd.interrupted() {
 		    bail!("Interrupted");
 		}
-		self.dump_dev(name,device,entry)?;
+		self.dump_dev(fs,name,device,entry)?;
 	    }
 	} else {
 	    warn!("Cannot find device {}",dir.dev);
@@ -76,6 +84,11 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
     }
 
     fn show_dir(&mut self) {
+	if Some(self.idrive) != self.idrive_shown {
+	    println!("DRV {:?}",
+		     self.fss.systems[self.idrive].origin);
+	    self.idrive_shown = Some(self.idrive);
+	}
 	let c1 : Vec<Component> = self.last_dir.components().collect();
 	let c2 : Vec<Component> = self.dir.components().collect();
 	let m1 = c1.len();
@@ -100,13 +113,14 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 	}
     }
 
-    fn dump_dev(&mut self,name:&OsString,device:&Device,entry:&Entry)
+    fn dump_dev(&mut self,fs:&FileSystem,name:&OsString,device:&Device,entry:&Entry)
 		->Result<()> {
 	self.current.push(name);
 	let nsl = name.to_string_lossy();
 	let path = self.current.as_os_str().to_string_lossy();
 
 	let mut data = FsData {
+	    drive:self.idrive as u64,
 	    name:&nsl,
 	    path:&path,
 	    timestamp:0,
@@ -174,7 +188,7 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 	if let Entry::Dir(dir) = entry {
 	    self.indent += 1;
 	    self.dir.push(name);
-	    self.dump_dir(dir)?;
+	    self.dump_dir(fs,dir)?;
 	    self.dir.pop();
 	    self.indent -= 1;
 	}

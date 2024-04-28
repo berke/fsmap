@@ -11,16 +11,16 @@ use crate::{
 };
 
 pub struct ExaminerCli {
-    fs:Vec<(OsString,FileSystem)>,
+    fss:FileSystems,
     limit:usize
 }
 
 const HELP_TEXT : &str = include_str!("../data/help.txt");
 
 impl ExaminerCli {
-    pub fn new(fs:Vec<(OsString,FileSystem)>)->Self {
+    pub fn new(fss:FileSystems)->Self {
 	Self {
-	    fs,
+	    fss,
 	    limit:1000
 	}
     }
@@ -33,20 +33,13 @@ impl ExaminerCli {
 		"find" => {
 		    let expr = Expr::parse(w)?;
 		    let mut limit = self.limit;
-		    for (drive,fs) in self.fs.iter() {
-			println!("Drive {:?}",drive);
-			let mut dp = Dumper::new(&sd,&fs,&expr);
-			match dp.dump() {
-			    Ok(()) => (),
-			    Err(e) => println!("{}",e)
-			}
-			println!("Entries: {}",dp.matching_entries);
-			println!("Bytes: {}",dp.matching_bytes);
+		    let mut dp = Dumper::new(&sd,&self.fss,&expr);
+		    match dp.dump() {
+			Ok(()) => (),
+			Err(e) => println!("{}",e)
 		    }
-		    // let mut finder = Finder::new(sd,x);
-		    // finder.do_find_multi(
-		    // 	&self.fs,
-		    // 	&mut limit)?;
+		    println!("Entries: {}",dp.matching_entries);
+		    println!("Bytes: {}",dp.matching_bytes);
 		},
 		"limit" => {
 		    let l : usize = w.parse()?;
@@ -56,6 +49,15 @@ impl ExaminerCli {
 	    }
 	} else {
 	    match u {
+		"drives" => {
+		    println!("Drives:");
+		    for (idrive,FileSystemEntry { origin,.. }) in
+			self.fss.systems.iter().enumerate() {
+			    println!("  {:3} {:?}",
+				     idrive,
+				     origin);
+			}
+		},
 		"limit?" => {
 		    if self.limit == usize::MAX {
 			println!("Unlimited");

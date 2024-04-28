@@ -43,14 +43,14 @@ fn collect(mut pargs:Arguments)->Result<()> {
     Ok(())
 }
 
-fn dump(mut pargs:Arguments)->Result<()> {
-    let input : OsString = pargs.value_from_str("--in")?;
-    let expr : String = pargs.opt_value_from_str("--pred")?
+fn dump(mut args:Arguments)->Result<()> {
+    let expr : String = args.opt_value_from_str("--pred")?
 	.unwrap_or_else(|| "%t".to_string());
     let expr = Expr::parse(&expr)?;
-    let fs = FileSystem::from_file(input)?;
+    let inputs = args.finish();
+    let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
     let sd = SigintDetector::new();
-    let mut dp = Dumper::new(&sd,&fs,&expr);
+    let mut dp = Dumper::new(&sd,&fss,&expr);
     dp.dump()?;
     Ok(())
 }
@@ -58,12 +58,8 @@ fn dump(mut pargs:Arguments)->Result<()> {
 fn examine(args:Arguments)->Result<()> {
     info!("Loading inputs");
     let inputs = args.finish();
-    let fs : Vec<(OsString,FileSystem)> =
-	inputs
-	.iter()
-	.flat_map(|path| FileSystem::from_file(path).map(|fs| (path.clone(),fs)))
-	.collect();
-    let mut cli = ExaminerCli::new(fs);
+    let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
+    let mut cli = ExaminerCli::new(fss);
 
     let config = rustyline::config::Config::builder()
 	.auto_add_history(true)

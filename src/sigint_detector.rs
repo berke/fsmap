@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::atomic::{AtomicBool,Ordering};
 
 static mut INTERRUPTED : AtomicBool = AtomicBool::new(false);
@@ -9,7 +10,8 @@ extern "C" fn sigint_handler(_sig:std::ffi::c_int) {
 }
 
 pub struct SigintDetector {
-    old:libc::sigaction
+    old:libc::sigaction,
+    interrupted:Cell<bool>
 }
 
 impl SigintDetector {
@@ -33,16 +35,26 @@ impl SigintDetector {
 		    &mut old);
 		old
 	    };
-	Self { old }
+	Self { old,
+	       interrupted:Cell::new(false) }
+    }
+
+    pub fn clear(&mut self) {
+	self.interrupted.set(false);
     }
 
     pub fn interrupted(&self)->bool {
-	unsafe { INTERRUPTED.compare_exchange(
+	if let Ok(true) = unsafe { INTERRUPTED.compare_exchange(
 	    true,
 	    false,
 	    Ordering::SeqCst,
 	    Ordering::SeqCst)
-	}.unwrap_or(false)
+	} {
+	    self.interrupted.set(true);
+	    true
+	} else {
+	    self.interrupted.get()
+	}
     }
 }
 
