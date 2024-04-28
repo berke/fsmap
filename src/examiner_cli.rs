@@ -6,16 +6,15 @@ use crate::{
     entry_collector::EntryCollector,
     fsexpr::Expr,
     fsmap::*,
+    limiter::{Limiter,LimiterSettings},
     sigint_detector::SigintDetector,
     watcher::Watcher
 };
 
 pub struct ExaminerCli {
     fss:FileSystems,
-    max_depth:usize,
-    max_breadth:usize,
-    max_entries:usize,
-    limit:usize
+    limiter:LimiterSettings,
+    show_counts:bool
 }
 
 const HELP_TEXT : &str = include_str!("../data/help.txt");
@@ -24,56 +23,60 @@ impl ExaminerCli {
     pub fn new(fss:FileSystems)->Self {
 	Self {
 	    fss,
-	    max_depth:usize::MAX,
-	    max_breadth:usize::MAX,
-	    max_entries:usize::MAX,
-	    limit:1000
+	    limiter:LimiterSettings::default(),
+	    show_counts:false
 	}
     }
 
     fn process<W:Watcher>(&mut self,w:&str,watcher:W)->Result<W> {
 	let sd = SigintDetector::new();
 	let expr = Expr::parse(w)?;
-	let limit = self.limit;
-	// let bp = EntryCollector::new();
-	let mut dp = Dumper::new(&sd,&self.fss,&expr,watcher);
+	let lim = Limiter::new(&self.limiter,watcher);
+	let mut dp = Dumper::new(&sd,&self.fss,&expr,lim);
 	match dp.dump() {
 	    Ok(()) => (),
 	    Err(e) => println!("{}",e)
 	}
-	println!("Entries: {}",dp.matching_entries);
-	println!("Bytes: {}",dp.matching_bytes);
-	Ok(dp.into_inner())
+	if self.show_counts {
+	    println!("Entries: {}",dp.matching_entries);
+	    println!("Bytes: {}",dp.matching_bytes);
+	}
+	Ok(dp.into_inner().into_inner())
+    }
+
+    fn show_limit(&self,d:usize) {
+	if d == usize::MAX {
+	    println!("unlimited");
+	} else {
+	    println!("{}",d);
+	}
+    }
+
+    fn set_limit(w:&str,l:&mut usize)->Result<()> {
+	if w == "u" {
+	    *l = usize::MAX;
+	} else {
+	    let d : usize = w.parse()?;
+	    *l = d;
+	}
+	Ok(())
     }
 
     pub fn handle_input(&mut self,u:&str)->Result<bool> {
 	let u = u.trim();
 	if let Some((v,w)) = u.split_once(' ') {
 	    match v {
-		"find" => self.process(w,EntryCollector::new())?.print(),
-		"tree" => {
+		"list" | "ls" => self.process(w,EntryCollector::new())?.print(),
+		"tree" | "tr" => {
 		    let mut bp = BasicPrinter::new();
-		    bp.set_max_depth(self.max_depth);
-		    bp.set_max_breadth(self.max_breadth);
-		    bp.set_max_entries(self.max_entries);
 		    let _ = self.process(w,bp)?;
 		},
-		"limit" => {
-		    let l : usize = w.parse()?;
-		    self.limit = l;
-		},
-		"maxdepth" | "maxd" => {
-		    let d : usize = w.parse()?;
-		    self.max_depth = d;
-		},
-		"maxbreadth" | "maxb" => {
-		    let d : usize = w.parse()?;
-		    self.max_breadth = d;
-		},
-		"maxent" | "maxe" => {
-		    let d : usize = w.parse()?;
-		    self.max_entries = d;
-		},
+		"maxdepth" | "maxd" =>
+		    Self::set_limit(w,&mut self.limiter.max_depth)?,
+		"maxbreadth" | "maxb" =>
+		    Self::set_limit(w,&mut self.limiter.max_breadth)?, 
+		"maxent" | "maxe" =>
+		    Self::set_limit(w,&mut self.limiter.max_entries)?,
 		_ => bail!("Unknown command"),
 	    }
 	} else {
@@ -87,35 +90,11 @@ impl ExaminerCli {
 				     origin);
 			}
 		},
-		"maxdepth?" | "maxd?" => {
-		    if self.max_depth == usize::MAX {
-			println!("Unlimited");
-		    } else {
-			println!("{}",self.max_depth);
-		    }
-		},
-		"maxbreadth?" | "maxb?" => {
-		    if self.max_breadth == usize::MAX {
-			println!("Unlimited");
-		    } else {
-			println!("{}",self.max_breadth);
-		    }
-		},
-		"maxent?" | "maxe?" => {
-		    if self.max_entries == usize::MAX {
-			println!("Unlimited");
-		    } else {
-			println!("{}",self.max_entries);
-		    }
-		},
-		"limit?" => {
-		    if self.limit == usize::MAX {
-			println!("Unlimited");
-		    } else {
-			println!("{}",self.limit);
-		    }
-		},
-		"unlimited" => self.limit = usize::MAX,
+		"counts" => self.show_counts = true,
+		"nocounts" => self.show_counts = false,
+		"maxdepth?" | "maxd?" => self.show_limit(self.limiter.max_depth),
+		"maxbreadth?" | "maxb?" => self.show_limit(self.limiter.max_breadth),
+		"maxent?" | "maxe?" => self.show_limit(self.limiter.max_entries),
 		"quit" => std::process::exit(0),
 		"help" => print!("{}",HELP_TEXT),
 		"" => (),

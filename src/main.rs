@@ -13,6 +13,7 @@ mod fsexpr;
 mod finder;
 mod fsmap;
 mod indent;
+mod limiter;
 mod scanner;
 mod sigint_detector;
 mod valve;

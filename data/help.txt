@@ -1,6 +1,30 @@
 Commands
 ========
-  find EXPR
+  list EXPR
+  ls EXPR
+    Find entries matching EXPR and display them as a raw list
+  tree EXPR
+  tr EXPR
+    Same as above, but display them in indented tree form
+  maxe N
+  maxent N
+    Set a limit on the maximum number of matching entries to be
+    displayed per directory.
+
+    Use u for unlimited
+  maxd N
+  maxdepth N
+    Set a limit of N on the maximum depth of search
+
+    Use u for unlimited
+  maxb N
+  maxbreadth N
+    Set a limit of N on th maximum breadh of search N (i.e. no
+    more than N subdirectories of a given directory will be explored)
+
+    Use u for unlimited
+  drives
+    List the "drives" (i.e. file system maps) that are loaded
   quit
 
 Expression syntax
@@ -25,3 +49,15 @@ EXPR1 | EXPR2
   True, matches all entries
 %f
   False, matches no entry
+%before DATE
+  Matches files with a timestamp before DATE, where date is YYYY-MM-DD
+%after DATE
+  Same as above, but with a timestamp after DATE
+%larger N
+  Matches files larger than or equal to N bytes.  Suffixes k, M and G stand for
+  base 2 kilobytes, megabytes and gigabytes, sometimes written
+  MiB, kiB and GiB
+%smaller N
+  Save as bove, but find files with a size smaller than or equal to N bytes
+%drive K
+  Limits results to those on "drive" number K

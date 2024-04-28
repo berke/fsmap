@@ -12,6 +12,15 @@ pub enum Action {
     Enter
 }
 
+impl Action {
+    pub fn is_skip(&self)->bool {
+	match self {
+	    Self::Skip => true,
+	    _ => false
+	}
+    }
+}
+
 pub trait Watcher {
     fn interrupted(&mut self)->Result<()> { Ok(()) }
     fn device_not_found(&mut self,dev:u64)->Result<()> { Ok(()) }

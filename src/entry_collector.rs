@@ -35,8 +35,8 @@ impl EntryCollector {
     }
     
     pub fn print(&self) {
-	for FsDataGen { drive,path,name,.. } in self.results.iter() {
-	    println!("{}:{} {}",drive,path,name);
+	for FsDataGen { drive,path,.. } in self.results.iter() {
+	    println!("{}:{}",drive,path);
 	}
     }
 }
