@@ -11,6 +11,12 @@ use crate::{
     watcher::{Action,Watcher}
 };
 
+#[derive(Default)]
+struct DirState {
+    breadth:usize,
+    entries:usize
+}
+
 pub struct BasicPrinter<'a> {
     tz:TimeZoneRef<'a>,
     indent:usize,
@@ -21,7 +27,8 @@ pub struct BasicPrinter<'a> {
     last_dir:PathBuf,
     max_depth:usize,
     max_breadth:usize,
-    breadth:Vec<usize>
+    max_entries:usize,
+    stack:Vec<DirState>
 }
 
 impl<'a> BasicPrinter<'a> {
@@ -36,7 +43,8 @@ impl<'a> BasicPrinter<'a> {
 	    last_dir:PathBuf::new(),
 	    max_depth:usize::MAX,
 	    max_breadth:usize::MAX,
-	    breadth:Vec::new()
+	    max_entries:usize::MAX,
+	    stack:Vec::new()
 	}
     }
 
@@ -46,6 +54,10 @@ impl<'a> BasicPrinter<'a> {
 
     pub fn set_max_breadth(&mut self,max_breadth:usize) {
 	self.max_breadth = max_breadth;
+    }
+
+    pub fn set_max_entries(&mut self,max_entries:usize) {
+	self.max_entries = max_entries;
     }
 
     fn show_dir(&mut self,fse:&FileSystemEntry)->Result<()> {
@@ -106,7 +118,7 @@ impl<'a> Watcher for BasicPrinter<'a> {
 	    self.indent = 0;
 	    self.dir.clear();
 	    self.last_dir.clear();
-	    self.breadth.push(0);
+	    self.stack.push(DirState::default());
 	    Ok(Action::Enter)
 	} else {
 	    Ok(Action::Skip)
@@ -119,9 +131,18 @@ impl<'a> Watcher for BasicPrinter<'a> {
     }
 
     fn enter_dir(&mut self,name:&OsString)->Result<Action> {
+	let n = self.stack.len();
+	let mut state = &mut self.stack[n - 1];
+	if state.breadth < self.max_breadth {
+	    state.breadth += 1;
+	} else {
+	    self.ellipsis();
+	    return Ok(Action::Skip);
+	}
+
 	if self.indent + 1 < self.max_depth {
 	    self.dir.push(name);
-	    self.breadth.push(0);
+	    self.stack.push(DirState::default());
 	    self.indent += 1;
 	    Ok(Action::Enter)
 	} else {
@@ -132,7 +153,7 @@ impl<'a> Watcher for BasicPrinter<'a> {
 
     fn leave_dir(&mut self)->Result<()> {
 	self.dir.pop();
-	self.breadth.pop();
+	self.stack.pop();
 	self.indent -= 1;
 	Ok(())
     }
@@ -143,9 +164,10 @@ impl<'a> Watcher for BasicPrinter<'a> {
 		      device:&Device,
 		      entry:&Entry,
 		      data:&FsData)->Result<Action> {
-	let n = self.breadth.len();
-	if self.breadth[n - 1] < self.max_breadth {
-	    self.breadth[n - 1] += 1;
+	let n = self.stack.len();
+	let mut state = &mut self.stack[n - 1];
+	if state.entries + 1 < self.max_entries {
+	    state.entries += 1;
 	} else {
 	    self.ellipsis();
 	    return Ok(Action::Skip);

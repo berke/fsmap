@@ -1,5 +1,5 @@
 use std::ffi::OsString;
-use anyhow::{Result};
+use anyhow::{bail,Result};
 
 use crate::{
     fsexpr::{FsData,FsDataGen},
@@ -22,6 +22,10 @@ impl Watcher for EntryCollector {
 		      data:&FsData)->Result<Action> {
 	self.results.push(data.map(|x| x.to_string()));
 	Ok(Action::Enter)
+    }
+
+    fn interrupted(&mut self)->Result<()> {
+	bail!("Interrupted");
     }
 }
 

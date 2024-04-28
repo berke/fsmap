@@ -14,6 +14,7 @@ pub struct ExaminerCli {
     fss:FileSystems,
     max_depth:usize,
     max_breadth:usize,
+    max_entries:usize,
     limit:usize
 }
 
@@ -25,6 +26,7 @@ impl ExaminerCli {
 	    fss,
 	    max_depth:usize::MAX,
 	    max_breadth:usize::MAX,
+	    max_entries:usize::MAX,
 	    limit:1000
 	}
     }
@@ -53,6 +55,7 @@ impl ExaminerCli {
 		    let mut bp = BasicPrinter::new();
 		    bp.set_max_depth(self.max_depth);
 		    bp.set_max_breadth(self.max_breadth);
+		    bp.set_max_entries(self.max_entries);
 		    let _ = self.process(w,bp)?;
 		},
 		"limit" => {
@@ -66,6 +69,10 @@ impl ExaminerCli {
 		"maxbreadth" | "maxb" => {
 		    let d : usize = w.parse()?;
 		    self.max_breadth = d;
+		},
+		"maxent" | "maxe" => {
+		    let d : usize = w.parse()?;
+		    self.max_entries = d;
 		},
 		_ => bail!("Unknown command"),
 	    }
@@ -92,6 +99,13 @@ impl ExaminerCli {
 			println!("Unlimited");
 		    } else {
 			println!("{}",self.max_breadth);
+		    }
+		},
+		"maxent?" | "maxe?" => {
+		    if self.max_entries == usize::MAX {
+			println!("Unlimited");
+		    } else {
+			println!("{}",self.max_entries);
 		    }
 		},
 		"limit?" => {
