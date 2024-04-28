@@ -1,14 +1,12 @@
 use std::ffi::OsString;
-use std::path::{Component,PathBuf};
-use anyhow::{bail,Result};
-use tz::{DateTime,TimeZoneRef};
-use log::warn;
+use std::path::{PathBuf};
+use anyhow::{Result};
 
 use crate::{
-    fsexpr::{FsData,FsDataGen,Predicate},
+    fsexpr::{FsData,Predicate},
     fsmap::*,
     sigint_detector::SigintDetector,
-    watcher::Watcher
+    watcher::{Action,Watcher}
 };
 
 pub struct Dumper<'a,'b,'c,P,W> {
@@ -16,8 +14,6 @@ pub struct Dumper<'a,'b,'c,P,W> {
     fss:&'b FileSystems,
     pred:&'c P,
     idrive:usize,
-    last_dir:PathBuf,
-    dir:PathBuf,
     current:PathBuf,
     watcher:W,
     pub matching_bytes:u64,
@@ -35,8 +31,6 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 	    pred,
 	    idrive:0,
 	    current:PathBuf::new(),
-	    last_dir:PathBuf::new(),
-	    dir:PathBuf::new(),
 	    matching_bytes:0,
 	    matching_entries:0,
 	    watcher
@@ -48,22 +42,25 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
     }
 	
     pub fn dump(&mut self)->Result<()> {
-	for (idrive,FileSystemEntry { fs,.. } ) in self.fss.systems.iter().enumerate() {
-	    self.idrive = idrive;
-	    self.dump_dir(&fs,&fs.root)?;
+	for (ifs,fse) in self.fss.systems.iter().enumerate() {
+	    if let Action::Enter = self.watcher.enter_fs(ifs,fse)? {
+		self.idrive = ifs;
+		self.dump_dir(fse,&fse.fs.root)?;
+		self.watcher.leave_fs()?;
+	    }
 	}
 	Ok(())
     }
 
-    fn dump_dir(&mut self,fs:&FileSystem,dir:&Directory)->Result<()> {
-	if let Some(device) = fs.mounts.get_device(dir.dev) {
+    fn dump_dir(&mut self,fse:&FileSystemEntry,dir:&Directory)->Result<()> {
+	if let Some(device) = fse.fs.mounts.get_device(dir.dev) {
 	    for (name,entry) in dir.entries.iter() {
 		if self.sd.interrupted() {
 		    self.watcher.interrupted()?;
 		}
-		self.watcher.enter_device(dir.dev)?;
-		self.dump_dev(fs,name,device,entry)?;
-		self.watcher.leave_device()?;
+		if let Action::Skip = self.dump_entry(fse,name,device,entry)? {
+		    break;
+		}
 	    }
 	} else {
 	    self.watcher.device_not_found(dir.dev)?;
@@ -71,8 +68,11 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 	Ok(())
     }
 
-    fn dump_dev(&mut self,fs:&FileSystem,name:&OsString,device:&Device,entry:&Entry)
-		->Result<()> {
+    fn dump_entry(&mut self,
+		  fse:&FileSystemEntry,
+		  name:&OsString,
+		  device:&Device,
+		  entry:&Entry)->Result<Action> {
 	self.current.push(name);
 	let nsl = name.to_string_lossy();
 	let path = self.current.as_os_str().to_string_lossy();
@@ -100,24 +100,27 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 	    _ => ()
 	}
 
+	let mut action = Action::Enter;
 	let show = self.pred.test(&data);
 	if show {
 	    self.matching_entries += 1;
 	    self.matching_bytes += data.size;
-	    self.watcher.matching_entry(
+	    action = self.watcher.matching_entry(
+		fse,
 		name,
 		device,
 		entry,
 		&data)?;
 	}
-	if let Entry::Dir(dir) = entry {
-	    self.dir.push(name);
-	    self.watcher.enter_dir(name)?;
-	    self.dump_dir(fs,dir)?;
-	    self.watcher.leave_dir()?;
-	    self.dir.pop();
+	if let Action::Enter = action {
+	    if let Entry::Dir(dir) = entry {
+		if let Action::Enter = self.watcher.enter_dir(name)? {
+		    self.dump_dir(fse,dir)?;
+		    self.watcher.leave_dir()?;
+		}
+	    }
 	}
 	self.current.pop();
-	Ok(())
+	Ok(action)
     }
 }

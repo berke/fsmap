@@ -19,7 +19,7 @@ mod valve;
 mod watcher;
 
 use basic_printer::BasicPrinter;
-use fsexpr::{Expr,Predicate};
+use fsexpr::{Expr};
 use fsmap::*;
 use examiner_cli::ExaminerCli;
 use counter::Counter;

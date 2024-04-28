@@ -4,7 +4,7 @@ pub enum IndentMode {
 }
 
 impl IndentMode {
-    fn put_indent(&self,indent:usize) {
+    pub fn put_indent(&self,indent:usize) {
 	match self {
 	    IndentMode::Numbered => print!(" {:2} ",indent),
 	    IndentMode::Spaces => {

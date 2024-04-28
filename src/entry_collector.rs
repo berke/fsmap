@@ -1,14 +1,10 @@
 use std::ffi::OsString;
-use std::path::{Component,PathBuf};
-use anyhow::{bail,Result};
-use tz::{DateTime,TimeZoneRef};
-use log::warn;
+use anyhow::{Result};
 
 use crate::{
-    fsexpr::{FsData,FsDataGen,Predicate},
+    fsexpr::{FsData,FsDataGen},
     fsmap::*,
-    sigint_detector::SigintDetector,
-    watcher::Watcher
+    watcher::{Action,Watcher}
 };
 
 pub type FsDataOwned = FsDataGen<String>;
@@ -19,12 +15,13 @@ pub struct EntryCollector {
 
 impl Watcher for EntryCollector {
     fn matching_entry(&mut self,
+		      fse:&FileSystemEntry,
 		      name:&OsString,
 		      device:&Device,
 		      entry:&Entry,
-		      data:&FsData)->Result<()> {
+		      data:&FsData)->Result<Action> {
 	self.results.push(data.map(|x| x.to_string()));
-	Ok(())
+	Ok(Action::Enter)
     }
 }
 
