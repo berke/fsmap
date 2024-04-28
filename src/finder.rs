@@ -28,7 +28,7 @@ impl<P> Finder<P> where P:Predicate {
 	    let mut pb = PathBuf::from(path);
 	    pb.push(name);
 	    let u = pb.as_os_str().to_string_lossy();
-	    if self.pred.test(&u) {
+	    if true { // self.pred.test(&u) {
 		println!("{}",u);
 		*limit -= 1;
 	    }

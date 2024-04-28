@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use regex::Regex;
 
 use crate::{
+    dumper::Dumper,
     fsexpr::Expr,
     fsmap::*,
     finder::Finder,
@@ -13,6 +14,8 @@ pub struct ExaminerCli {
     fs:Vec<(OsString,FileSystem)>,
     limit:usize
 }
+
+const HELP_TEXT : &str = include_str!("../data/help.txt");
 
 impl ExaminerCli {
     pub fn new(fs:Vec<(OsString,FileSystem)>)->Self {
@@ -28,37 +31,35 @@ impl ExaminerCli {
 	if let Some((v,w)) = u.split_once(' ') {
 	    match v {
 		"find" => {
-		    let x : Expr<Regex> = Expr::parse(w)?;
+		    let expr = Expr::parse(w)?;
 		    let mut limit = self.limit;
-		    let mut finder = Finder::new(sd,x);
-		    finder.do_find_multi(
-			&self.fs,
-			&mut limit)?;
+		    for (drive,fs) in self.fs.iter() {
+			let mut dp = Dumper::new(&sd,&fs,&expr);
+			dp.dump()?;
+		    }
+		    // let mut finder = Finder::new(sd,x);
+		    // finder.do_find_multi(
+		    // 	&self.fs,
+		    // 	&mut limit)?;
+		},
+		"limit" => {
+		    let l : usize = w.parse()?;
+		    self.limit = l;
 		},
 		_ => bail!("Unknown command"),
 	    }
 	} else {
 	    match u {
-		"quit" => std::process::exit(0),
-		"help" => {
-		    println!("Commands:\n\
-			      \n\
-			      find EXPR\n\
-			      'REGEX'\n\
-			      quit\n\
-			      help\n\
-			      \n\
-			      Grammar:\n\
-			      \n\
-			      'REGEX'\n\
-			      REGEX\n\
-			      EXPR & EXPR\n\
-			      EXPR | EXPR\n\
-			      EXPR \\ EXPR\n\
-			      ( EXPR )\n\
-			      %t\n\
-			      %f");
+		"limit?" => {
+		    if self.limit == usize::MAX {
+			println!("Unlimited");
+		    } else {
+			println!("{}",self.limit);
+		    }
 		},
+		"unlimited" => self.limit = usize::MAX,
+		"quit" => std::process::exit(0),
+		"help" => print!("{}",HELP_TEXT),
 		"" => (),
 		_ => bail!("Unknown command with no arguments")
 	    }

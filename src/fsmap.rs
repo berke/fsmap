@@ -2,8 +2,9 @@ use anyhow::Result;
 use serde::{Serialize,Deserialize};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::{File,Metadata};
 use std::io::{BufReader,BufWriter};
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use log::{self,info};
 
@@ -42,6 +43,20 @@ pub struct FileSystem {
 pub struct FileInfo {
     pub size:u64,
     pub time:i32
+}
+
+impl FileInfo {
+    pub fn of_metadata(md:&Metadata)->Self {
+	let time = (md.mtime().max(md.atime()).max(md.ctime()) / 60) as i32;
+	Self {
+	    size:md.size(),
+	    time
+	}
+    }
+
+    pub fn unix_time(&self)->i64 {
+	self.time as i64 * 60
+    }
 }
 
 impl Device {
@@ -108,41 +123,5 @@ impl FileSystem {
         let mut buf = BufWriter::new(fd);
         self.serialize(&mut rmp_serde::Serializer::new(&mut buf))?;
         Ok(())
-    }
-
-    pub fn dump(&self) {
-	self.dump_dir(&self.root,0);
-    }
-
-    fn put_indent(indent:usize) {
-	for _ in 0..indent {
-	    print!(" ");
-	}
-    }
-
-    pub fn dump_dir(&self,dir:&Directory,indent:usize) {
-	for (name,entry) in dir.entries.iter() {
-	    self.dump_dev(name,dir.dev,entry,indent + 1);
-	}
-    }
-
-    pub fn dump_dev(&self,name:&OsString,dev:u64,entry:&Entry,indent:usize) {
-	match entry {
-	    &Entry::File(ino) => {
-		let fi = self.mounts.get_device(dev).get_inode(ino);
-		print!("{:10} {:10} ",fi.size,fi.time);
-		Self::put_indent(indent);
-		println!("{}",name.to_string_lossy());
-	    },
-	    Entry::Dir(dir) => {
-		print!("{:21} ","DIR");
-		Self::put_indent(indent);
-		println!("{}",name.to_string_lossy());
-		self.dump_dir(dir,indent + 1);
-	    },
-	    Entry::Symlink(sl) => println!(" -> {:?}",sl),
-	    Entry::Other(ino) => println!(" OTHER {}",ino),
-	    Entry::Error(err) => println!(" ERROR {}",err)
-	}
     }
 }

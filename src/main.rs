@@ -3,8 +3,10 @@ use pico_args::Arguments;
 use std::ffi::OsString;
 use std::path::Path;
 use log::{self,info};
+use regex::Regex;
 
 mod counter;
+mod dumper;
 mod examiner_cli;
 mod fsexpr;
 mod finder;
@@ -13,10 +15,13 @@ mod scanner;
 mod sigint_detector;
 mod valve;
 
+use fsexpr::{Expr,Predicate};
 use fsmap::*;
 use examiner_cli::ExaminerCli;
 use counter::Counter;
+use dumper::Dumper;
 use scanner::Scanner;
+use sigint_detector::SigintDetector;
 
 fn collect(mut pargs:Arguments)->Result<()> {
     let path_os : OsString = pargs.value_from_str("--path")?;
@@ -41,8 +46,13 @@ fn collect(mut pargs:Arguments)->Result<()> {
 
 fn dump(mut pargs:Arguments)->Result<()> {
     let input : OsString = pargs.value_from_str("--in")?;
+    let expr : String = pargs.opt_value_from_str("--pred")?
+	.unwrap_or_else(|| "%t".to_string());
+    let expr = Expr::parse(&expr)?;
     let fs = FileSystem::from_file(input)?;
-    fs.dump();
+    let sd = SigintDetector::new();
+    let mut dp = Dumper::new(&sd,&fs,&expr);
+    dp.dump()?;
     Ok(())
 }
 

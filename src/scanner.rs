@@ -39,11 +39,7 @@ impl<W> Scanner<W> where W:Watcher {
 	let d = mounts.get_device_mut(dev);
 	let ino = md.ino();
 	if !d.has_inode(ino) {
-	    let time = (md.mtime().max(md.atime()).max(md.ctime()) / 60) as i32;
-	    let fi = FileInfo{
-		size:md.size(),
-		time
-	    };
+	    let fi = FileInfo::of_metadata(&md);
 	    d.insert_inode(ino,fi);
 	}
 	let ent =
