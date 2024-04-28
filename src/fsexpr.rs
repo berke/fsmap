@@ -65,15 +65,15 @@ pub enum FsAtom {
     Larger(u64)
 }
 
-pub struct FsData<'a> {
+pub struct FsDataGen<T> {
     // Drive ID
     pub drive:u64,
     
     // Base name
-    pub name:&'a str,
+    pub name:T,
     
     // Full path
-    pub path:&'a str,
+    pub path:T,
 
     // Timestamp (Unix)
     pub timestamp:i64,
@@ -81,6 +81,21 @@ pub struct FsData<'a> {
     // Size (bytes)
     pub size:u64,
 }
+
+impl<T> FsDataGen<T> {
+    pub fn map<U,F:Fn(&T)->U>(&self,f:F)->FsDataGen<U> {
+	let &Self { drive,ref name,ref path,timestamp,size } = self;
+	FsDataGen {
+	    name:f(name),
+	    path:f(path),
+	    drive,
+	    timestamp,
+	    size
+	}
+    }
+}
+
+pub type FsData<'a> = FsDataGen<&'a str>;
 
 pub trait Predicate {
     fn test(&self,data:&FsData)->bool;

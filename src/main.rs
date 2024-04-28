@@ -18,7 +18,7 @@ use fsexpr::{Expr,Predicate};
 use fsmap::*;
 use examiner_cli::ExaminerCli;
 use counter::Counter;
-use dumper::Dumper;
+use dumper::{BasicPrinter,Dumper};
 use scanner::Scanner;
 use sigint_detector::SigintDetector;
 
@@ -50,7 +50,8 @@ fn dump(mut args:Arguments)->Result<()> {
     let inputs = args.finish();
     let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
     let sd = SigintDetector::new();
-    let mut dp = Dumper::new(&sd,&fss,&expr);
+    let bp = BasicPrinter::new();
+    let mut dp = Dumper::new(&sd,&fss,&expr,bp);
     dp.dump()?;
     Ok(())
 }
