@@ -3,7 +3,9 @@ use std::ffi::OsString;
 use regex::Regex;
 
 use crate::{
-    dumper::{BasicPrinter,Dumper,ResultCollector},
+    basic_printer::BasicPrinter,
+    dumper::Dumper,
+    entry_collector::EntryCollector,
     fsexpr::Expr,
     fsmap::*,
     finder::Finder,
@@ -33,7 +35,7 @@ impl ExaminerCli {
 		"find" => {
 		    let expr = Expr::parse(w)?;
 		    let mut limit = self.limit;
-		    let bp = ResultCollector::new();
+		    let bp = EntryCollector::new();
 		    let mut dp = Dumper::new(&sd,&self.fss,&expr,bp);
 		    match dp.dump() {
 			Ok(()) => (),

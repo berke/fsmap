@@ -4,21 +4,26 @@ use std::ffi::OsString;
 use std::path::Path;
 use log::{self,info};
 
+mod basic_printer;
 mod counter;
 mod dumper;
+mod entry_collector;
 mod examiner_cli;
 mod fsexpr;
 mod finder;
 mod fsmap;
+mod indent;
 mod scanner;
 mod sigint_detector;
 mod valve;
+mod watcher;
 
+use basic_printer::BasicPrinter;
 use fsexpr::{Expr,Predicate};
 use fsmap::*;
 use examiner_cli::ExaminerCli;
 use counter::Counter;
-use dumper::{BasicPrinter,Dumper};
+use dumper::Dumper;
 use scanner::Scanner;
 use sigint_detector::SigintDetector;
 
