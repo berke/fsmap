@@ -1,4 +1,4 @@
-use anyhow::{Result};
+use anyhow::{anyhow,Result};
 use std::ffi::OsString;
 use std::fs::{DirEntry};
 use std::os::unix::fs::MetadataExt;
@@ -36,7 +36,8 @@ impl<W> Scanner<W> where W:Watcher {
 	self.watcher.notify(&sub_path);
 	let md = e.metadata()?;
 	let dev = md.dev();
-	let d = mounts.get_device_mut(dev);
+	let d = mounts.get_device_mut(dev)
+	    .ok_or_else(|| anyhow!("Cannot find device"))?;
 	let ino = md.ino();
 	if !d.has_inode(ino) {
 	    let fi = FileInfo::of_metadata(&md);

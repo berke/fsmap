@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::path::{Component,PathBuf};
 use anyhow::{bail,Result};
 use tz::{DateTime,TimeZoneRef};
+use log::warn;
 
 use crate::{
     fsexpr::{FsData,Predicate},
@@ -17,7 +18,15 @@ pub struct Dumper<'a,'b,'c,'d,P> {
     dir:PathBuf,
     current:PathBuf,
     indent:usize,
-    tz:TimeZoneRef<'d>
+    indent_mode:IndentMode,
+    tz:TimeZoneRef<'d>,
+    pub matching_bytes:u64,
+    pub matching_entries:usize,
+}
+
+pub enum IndentMode {
+    Numbered,
+    Spaces
 }
 
 impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
@@ -30,7 +39,10 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 	    last_dir:PathBuf::new(),
 	    dir:PathBuf::new(),
 	    indent:0,
-	    tz:TimeZoneRef::utc()
+	    indent_mode:IndentMode::Spaces,
+	    tz:TimeZoneRef::utc(),
+	    matching_bytes:0,
+	    matching_entries:0
 	}
     }
 	
@@ -39,19 +51,26 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
     }
 
     fn put_indent(&self,indent:usize) {
-	print!(" {:2} ",indent);
-	// for _ in 0..indent {
-	//     print!("  ");
-	// }
+	match self.indent_mode {
+	    IndentMode::Numbered => print!(" {:2} ",indent),
+	    IndentMode::Spaces => {
+		for _ in 0..indent {
+		    print!("  ");
+		}
+	    }
+	}
     }
 
     fn dump_dir(&mut self,dir:&Directory)->Result<()> {
-	let device = self.fs.mounts.get_device(dir.dev);
-	for (name,entry) in dir.entries.iter() {
-	    if self.sd.interrupted() {
-		bail!("Interrupted");
+	if let Some(device) = self.fs.mounts.get_device(dir.dev) {
+	    for (name,entry) in dir.entries.iter() {
+		if self.sd.interrupted() {
+		    bail!("Interrupted");
+		}
+		self.dump_dev(name,device,entry)?;
 	    }
-	    self.dump_dev(name,device,entry)?;
+	} else {
+	    warn!("Cannot find device {}",dir.dev);
 	}
 	Ok(())
     }
@@ -68,7 +87,7 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 		i < m1 &&
 		c1[i] == c2[i];
 	    if !match_so_far {
-		print!("{:21} ","DIR");
+		print!("{:21} ","   ");
 		self.put_indent(i);
 		match c2[i] {
 		    Component::Normal(u) => println!("{}/",u.to_string_lossy()),
@@ -111,16 +130,16 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 
 	let show = self.pred.test(&data);
 	if show {
+	    self.matching_entries += 1;
+	    self.matching_bytes += data.size;
 	    self.show_dir();
-	}
-	if let Entry::Dir(dir) = entry {
-	    self.indent += 1;
-	    self.dir.push(name);
-	    self.dump_dir(dir)?;
-	    self.dir.pop();
-	    self.indent -= 1;
-	} else if show {
 	    match entry {
+		&Entry::Dir(_) => {
+		    print!("{:21} ","DIR");
+		    self.put_indent(self.indent);
+		    println!("{}",
+			     nsl);
+		},
 		&Entry::File(ino) => {
 		    let fi = device.get_inode(ino);
 		    let dt = DateTime::from_timespec(
@@ -150,8 +169,14 @@ impl<'a,'b,'c,'d,P> Dumper<'a,'b,'c,'d,P> where P:Predicate {
 		    self.put_indent(self.indent);
 		    println!("{} : {}",nsl,err);
 		},
-		_ => ()
 	    }
+	}
+	if let Entry::Dir(dir) = entry {
+	    self.indent += 1;
+	    self.dir.push(name);
+	    self.dump_dir(dir)?;
+	    self.dir.pop();
+	    self.indent -= 1;
 	}
 	self.current.pop();
 	Ok(())

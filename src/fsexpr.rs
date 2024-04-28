@@ -1,4 +1,5 @@
 use anyhow::{bail,Result};
+use tz::UtcDateTime;
 use regex::Regex;
 
 #[derive(Debug,Clone)]
@@ -18,6 +19,7 @@ pub enum Token {
     Unsigned(u64),
     Date(FsDate),
     Str(String),
+    Name,
     Before,
     After,
     Smaller,
@@ -37,15 +39,27 @@ pub struct FsDate {
     pub day:i32
 }
 
+impl FsDate {
+    fn to_timestamp(&self)->Result<i64> {
+	Ok(UtcDateTime::new(
+	    self.year,
+	    self.month as u8,
+	    self.day as u8,
+	    0,
+	    0,
+	    0,
+	    0)?
+	    .unix_time())
+    }
+}
+
 #[derive(Clone,Debug)]
 pub enum FsAtom {
     // DirMatch(Regex),
     PathMatch(Regex),
     NameMatch(Regex),
-    IsFile,
-    IsDir,
-    Before(FsDate),
-    After(FsDate),
+    Before(i64),
+    After(i64),
     Smaller(u64),
     Larger(u64)
 }
@@ -87,8 +101,9 @@ impl FsAtom {
 	    Self::PathMatch(rx) => rx.is_match(data.path),
 	    Self::NameMatch(rx) => rx.is_match(data.name),
 	    &Self::Smaller(x) => data.size <= x,
-	    &Self::Larger(x) => data.size >= x,
-	    _ => false
+	    &Self::Larger(x) => x <= data.size,
+	    &Self::Before(x) => data.timestamp <= x,
+	    &Self::After(x) => x <= data.timestamp,
 	}
     }
 }
@@ -122,10 +137,18 @@ impl Expr<FsAtom> {
 	match u {
 	    [Token::False,rest @ ..] => Ok((Expr::False,rest)),
 	    [Token::True,rest @ ..] => Ok((Expr::True,rest)),
-	    [Token::Larger,Token::Unsigned(x),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::Larger(*x)),rest)),
 	    [Token::Smaller,Token::Unsigned(x),rest @ ..] =>
 		Ok((Expr::Atom(FsAtom::Smaller(*x)),rest)),
+	    [Token::Larger,Token::Unsigned(x),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Larger(*x)),rest)),
+	    [Token::Before,Token::Date(d),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::Before(d.to_timestamp()?)),rest)),
+	    [Token::After,Token::Date(d),rest @ ..] =>
+		Ok((Expr::Atom(FsAtom::After(d.to_timestamp()?)),rest)),
+	    [Token::Name,Token::Str(u),rest @ ..] => {
+		let rex = Regex::new(u)?;
+		Ok((Expr::Atom(FsAtom::NameMatch(rex)),rest))
+	    },
 	    [Token::Str(u),rest @ ..] => {
 		let rex = Regex::new(u)?;
 		Ok((Expr::Atom(FsAtom::PathMatch(rex)),rest))
@@ -195,6 +218,7 @@ impl Token {
 		    match kw.as_str() {
 			"t" => Self::True,
 			"f" => Self::False,
+			"name" => Self::Name,
 			"before" => Self::Before,
 			"after" => Self::After,
 			"smaller" => Self::Smaller,
@@ -236,7 +260,7 @@ impl Token {
 	}
     }
 
-    fn parse_size(mut u:&[char])->Result<(u64,&[char])> {
+    fn parse_size(u:&[char])->Result<(u64,&[char])> {
 	let (n,rest) = Self::parse_u64(u,String::new())?;
 	match rest {
 	    ['G',rest @ ..] => Ok((n << 30,rest)),

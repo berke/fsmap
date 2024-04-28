@@ -99,13 +99,13 @@ impl Mounts {
 	self.devices.insert(dev,Device::new());
     }
 
-    pub fn get_device_mut(&mut self,dev:u64)->&mut Device {
+    pub fn get_device_mut(&mut self,dev:u64)->Option<&mut Device> {
 	self.ensure_device(dev);
-	self.devices.get_mut(&dev).unwrap()
+	self.devices.get_mut(&dev)
     }
 
-    pub fn get_device(&self,dev:u64)->&Device {
-	self.devices.get(&dev).unwrap()
+    pub fn get_device(&self,dev:u64)->Option<&Device> {
+	self.devices.get(&dev)
     }
 }
 

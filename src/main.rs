@@ -3,7 +3,6 @@ use pico_args::Arguments;
 use std::ffi::OsString;
 use std::path::Path;
 use log::{self,info};
-use regex::Regex;
 
 mod counter;
 mod dumper;

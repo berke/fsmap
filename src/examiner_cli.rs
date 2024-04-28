@@ -34,8 +34,14 @@ impl ExaminerCli {
 		    let expr = Expr::parse(w)?;
 		    let mut limit = self.limit;
 		    for (drive,fs) in self.fs.iter() {
+			println!("Drive {:?}",drive);
 			let mut dp = Dumper::new(&sd,&fs,&expr);
-			dp.dump()?;
+			match dp.dump() {
+			    Ok(()) => (),
+			    Err(e) => println!("{}",e)
+			}
+			println!("Entries: {}",dp.matching_entries);
+			println!("Bytes: {}",dp.matching_bytes);
 		    }
 		    // let mut finder = Finder::new(sd,x);
 		    // finder.do_find_multi(

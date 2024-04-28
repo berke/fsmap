@@ -1,0 +1,27 @@
+Commands
+========
+  find EXPR
+  quit
+
+Expression syntax
+=================
+
+REGEX
+  Matches the full path of the entry against the regular expression,
+  where REGEX is a regular expression excluding characters such as
+  spaces and single quotes
+'REGEX'
+  Quoted regular expression, allowing arbitrary characters to be used
+  Use \' and \\ for quoting single quotes and backslashes, respectively
+EXPR1 \ EXPR2
+  Returns entries that match EXPR1 but not EXPR2 (highest priority)
+EXPR1 & EXPR2
+  Returns entries that match both EXPR1 and EXPR2, higher priority
+EXPR1 | EXPR2
+  Returns entries that match either EXPR1 or EXPR2 (lowest priority)
+( EXPR )
+  For grouping expressions
+%t
+  True, matches all entries
+%f
+  False, matches no entry
