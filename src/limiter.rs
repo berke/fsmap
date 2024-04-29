@@ -53,6 +53,12 @@ impl<'a,W> Limiter<'a,W> where W:Watcher {
 }
 
 impl<'a,W> Watcher for Limiter<'a,W> where W:Watcher {
+    fn interrupted(&mut self)->Result<()> { self.watcher.interrupted() }
+
+    fn device_not_found(&mut self,dev:u64)->Result<()> {
+	self.watcher.device_not_found(dev)
+    }
+
     fn enter_fs(&mut self,ifs:usize,fse:&FileSystemEntry)->Result<Action> {
 	let n = self.stack.len();
 	if n + 1 < self.settings.max_depth {

@@ -83,8 +83,8 @@ impl Device {
 	self.inodes.insert(ino,fi);
     }
 
-    pub fn get_inode(&self,ino:u64)->&FileInfo {
-	self.inodes.get(&ino).expect("Cannot find inode")
+    pub fn get_inode(&self,ino:u64)->Option<&FileInfo> {
+	self.inodes.get(&ino)
     }
 }
 

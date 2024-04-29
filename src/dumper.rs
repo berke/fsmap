@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 use std::path::{PathBuf};
 use anyhow::{Result};
+use log::warn;
 
 use crate::{
     fsexpr::{FsData,Predicate},
@@ -87,9 +88,12 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 
 	match entry {
 	    &Entry::File(ino) => {
-		let fi = device.get_inode(ino);
-		data.size = fi.size;
-		data.timestamp = fi.unix_time();
+		if let Some(fi) = device.get_inode(ino) {
+		    data.size = fi.size;
+		    data.timestamp = fi.unix_time();
+		} else {
+		    warn!("Inode {} not found",ino);
+		}
 	    },
 	    Entry::Symlink(sl) => {
 	    },

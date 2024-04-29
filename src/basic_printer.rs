@@ -125,18 +125,21 @@ impl<'a> Watcher for BasicPrinter<'a> {
 		println!("{}",data.name);
 	    },
 	    &Entry::File(ino) => {
-		let fi = device.get_inode(ino);
-		let dt = DateTime::from_timespec(
-		    fi.unix_time(),
-		    0,
-		    self.tz)?;
-		print!("{:10} {:04}-{:02}-{:02} ",
-		       fi.size,
-		       dt.year(),
-		       dt.month(),
-		       dt.month_day());
-		self.put_indent(self.indent);
-		println!("{}",data.name);
+		if let Some(fi) = device.get_inode(ino) {
+		    let dt = DateTime::from_timespec(
+			fi.unix_time(),
+			0,
+			self.tz)?;
+		    print!("{:10} {:04}-{:02}-{:02} ",
+			   fi.size,
+			   dt.year(),
+			   dt.month(),
+			   dt.month_day());
+		    self.put_indent(self.indent);
+		    println!("{}",data.name);
+		} else {
+		    println!("{:10} {:10} {}","NO-INODE",ino,data.name);
+		}
 	    },
 	    Entry::Symlink(sl) => {
 		print!("{:21} ","SYML");
