@@ -34,6 +34,10 @@ impl<'a> BasicPrinter<'a> {
 	}
     }
 
+    pub fn set_indent_mode(&mut self,mode:IndentMode) {
+	self.indent_mode = mode;
+    }
+
     fn show_dir(&mut self,fse:&FileSystemEntry)->Result<()> {
 	if self.ifs != self.ifs_shown {
 	    println!("DRV {:?}",
@@ -68,12 +72,6 @@ impl<'a> BasicPrinter<'a> {
     fn put_indent(&self,indent:usize) {
 	self.indent_mode.put_indent(indent);
     }
-
-    fn ellipsis(&self) {
-	print!("{:21} ","");
-	self.put_indent(self.indent);
-	println!("...");
-    }
 }
 
 impl<'a> Watcher for BasicPrinter<'a> {
@@ -86,7 +84,7 @@ impl<'a> Watcher for BasicPrinter<'a> {
 	Ok(())
     }
 
-    fn enter_fs(&mut self,ifs:usize,fse:&FileSystemEntry)->Result<Action> {
+    fn enter_fs(&mut self,ifs:usize,_fse:&FileSystemEntry)->Result<Action> {
 	self.ifs = Some(ifs);
 	self.indent = 0;
 	self.dir.clear();
@@ -113,7 +111,7 @@ impl<'a> Watcher for BasicPrinter<'a> {
 
     fn matching_entry(&mut self,
 		      fse:&FileSystemEntry,
-		      name:&OsString,
+		      _name:&OsString,
 		      device:&Device,
 		      entry:&Entry,
 		      data:&FsData)->Result<Action> {

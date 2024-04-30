@@ -15,10 +15,10 @@ pub struct EntryCollector {
 
 impl Watcher for EntryCollector {
     fn matching_entry(&mut self,
-		      fse:&FileSystemEntry,
-		      name:&OsString,
-		      device:&Device,
-		      entry:&Entry,
+		      _fse:&FileSystemEntry,
+		      _name:&OsString,
+		      _device:&Device,
+		      _entry:&Entry,
 		      data:&FsData)->Result<Action> {
 	self.results.push(data.map(|x| x.to_string()));
 	Ok(Action::Enter)

@@ -2,7 +2,7 @@ use anyhow::{Result,bail};
 use pico_args::Arguments;
 use std::ffi::OsString;
 use std::path::Path;
-use log::{self,info};
+use log::{self,info,warn};
 
 mod basic_printer;
 mod boolean;
@@ -57,6 +57,9 @@ fn dump(mut args:Arguments)->Result<()> {
     let expr = FsExpr::parse(&expr)?;
     let inputs = args.finish();
     let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
+    for (path,err) in &errs {
+	warn!("Error loading {:?}: {}",path,err);
+    }
     let sd = SigintDetector::new();
     let bp = BasicPrinter::new();
     let mut dp = Dumper::new(&sd,&fss,&expr,bp);
@@ -68,6 +71,9 @@ fn examine(args:Arguments)->Result<()> {
     info!("Loading inputs");
     let inputs = args.finish();
     let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
+    for (path,err) in &errs {
+	warn!("Error loading {:?}: {}",path,err);
+    }
     let mut cli = ExaminerCli::new(fss);
 
     let config = rustyline::config::Config::builder()

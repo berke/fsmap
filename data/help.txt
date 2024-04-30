@@ -6,6 +6,9 @@ Commands
   tree EXPR
   tr EXPR
     Same as above, but display them in indented tree form
+  ntree EXPR
+  ntr EXPR
+    Same as above, but display indentation levels as numbers
   maxe N
   maxent N
     Set a limit on the maximum number of matching entries to be

@@ -39,10 +39,6 @@ impl SigintDetector {
 	       interrupted:Cell::new(false) }
     }
 
-    pub fn clear(&mut self) {
-	self.interrupted.set(false);
-    }
-
     pub fn interrupted(&self)->bool {
 	if let Ok(true) = unsafe { INTERRUPTED.compare_exchange(
 	    true,

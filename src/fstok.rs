@@ -1,10 +1,7 @@
 use anyhow::{bail,Result};
-use tz::UtcDateTime;
-use regex::Regex;
 
 use crate::{
-    boolean::Expr,
-    fsexpr::{FsAtom,FsDate}
+    fsexpr::{FsDate}
 };
 
 #[derive(Debug,Clone)]
@@ -73,7 +70,7 @@ impl Token {
 		let (n,rest) = Self::parse_size(u)?;
 		Ok((Self::Unsigned(n),rest))
 	    },
-	    [c @ ('a'..='z'|'A'..='Z'|'0'..='9'
+	    [c @ ('a'..='z'|'A'..='Z'
 		  |'/'|'.'|','|'*'|'?'|'$'|'^'|'-'|'_'),
 	     rest @ ..] => Self::eat_basic_str(rest,(*c).into()),
 	    [c,..] => bail!("Unexpected character {:?}",c),

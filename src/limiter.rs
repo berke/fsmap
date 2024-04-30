@@ -1,8 +1,5 @@
 use std::ffi::OsString;
-use anyhow::{bail,Result};
-use tz::{DateTime,TimeZoneRef};
-use log::warn;
-use std::path::{Component,PathBuf};
+use anyhow::{Result};
 
 use crate::{
     fsexpr::{FsData},
@@ -77,9 +74,8 @@ impl<'a,W> Watcher for Limiter<'a,W> where W:Watcher {
     }
 
     fn enter_dir(&mut self,name:&OsString)->Result<Action> {
-	let mut res = Action::Enter;
 	let n = self.stack.len();
-	let mut state = &mut self.stack[n - 1];
+	let state = &mut self.stack[n - 1];
 	if state.breadth + 1 < self.settings.max_breadth
 	    && n + 1 < self.settings.max_depth {
 		state.breadth += 1;
@@ -108,7 +104,7 @@ impl<'a,W> Watcher for Limiter<'a,W> where W:Watcher {
 		      entry:&Entry,
 		      data:&FsData)->Result<Action> {
 	let n = self.stack.len();
-	let mut state = &mut self.stack[n - 1];
+	let state = &mut self.stack[n - 1];
 	if state.entries + 1 < self.settings.max_entries {
 	    state.entries += 1;
 	    self.watcher.matching_entry(fse,name,device,entry,data)

@@ -6,6 +6,7 @@ use crate::{
     entry_collector::EntryCollector,
     fsexpr::FsExpr,
     fsmap::*,
+    indent::IndentMode,
     limiter::{Limiter,LimiterSettings},
     sigint_detector::SigintDetector,
     watcher::Watcher
@@ -68,7 +69,12 @@ impl ExaminerCli {
 	    match v {
 		"list" | "ls" => self.process(w,EntryCollector::new())?.print(),
 		"tree" | "tr" => {
+		    let bp = BasicPrinter::new();
+		    let _ = self.process(w,bp)?;
+		},
+		"ntree" | "ntr" => {
 		    let mut bp = BasicPrinter::new();
+		    bp.set_indent_mode(IndentMode::Numbered);
 		    let _ = self.process(w,bp)?;
 		},
 		"maxdepth" | "maxd" =>

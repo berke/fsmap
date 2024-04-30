@@ -95,13 +95,10 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 		    warn!("Inode {} not found",ino);
 		}
 	    },
-	    Entry::Symlink(sl) => {
-	    },
-	    Entry::Other(ino) => {
-	    },
-	    Entry::Error(err) => {
-	    },
-	    _ => ()
+	    Entry::Dir(_) |
+	    Entry::Symlink(_) |
+	    Entry::Other(_) |
+	    Entry::Error(_) => ()
 	}
 
 	let mut action = Action::Enter;
