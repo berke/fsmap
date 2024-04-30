@@ -5,6 +5,7 @@ use std::path::Path;
 use log::{self,info};
 
 mod basic_printer;
+mod boolean;
 mod counter;
 mod dumper;
 mod entry_collector;
@@ -21,7 +22,7 @@ mod valve;
 mod watcher;
 
 use basic_printer::BasicPrinter;
-use fsexpr::{Expr};
+use fsexpr::FsExpr;
 use fsmap::*;
 use examiner_cli::ExaminerCli;
 use counter::Counter;
@@ -53,7 +54,7 @@ fn collect(mut pargs:Arguments)->Result<()> {
 fn dump(mut args:Arguments)->Result<()> {
     let expr : String = args.opt_value_from_str("--pred")?
 	.unwrap_or_else(|| "%t".to_string());
-    let expr = Expr::parse(&expr)?;
+    let expr = FsExpr::parse(&expr)?;
     let inputs = args.finish();
     let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
     let sd = SigintDetector::new();

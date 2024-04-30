@@ -2,7 +2,10 @@ use anyhow::{bail,Result};
 use tz::UtcDateTime;
 use regex::Regex;
 
-use crate::fsexpr::{Expr,FsAtom,FsDate};
+use crate::{
+    boolean::Expr,
+    fsexpr::{FsAtom,FsDate}
+};
 
 #[derive(Debug,Clone)]
 pub enum Token {

@@ -4,7 +4,7 @@ use crate::{
     basic_printer::BasicPrinter,
     dumper::Dumper,
     entry_collector::EntryCollector,
-    fsexpr::Expr,
+    fsexpr::FsExpr,
     fsmap::*,
     limiter::{Limiter,LimiterSettings},
     sigint_detector::SigintDetector,
@@ -30,7 +30,7 @@ impl ExaminerCli {
 
     fn process<W:Watcher>(&mut self,w:&str,watcher:W)->Result<W> {
 	let sd = SigintDetector::new();
-	let expr = Expr::parse(w)?;
+	let expr = FsExpr::parse(w)?;
 	let lim = Limiter::new(&self.limiter,watcher);
 	let mut dp = Dumper::new(&sd,&self.fss,&expr,lim);
 	match dp.dump() {

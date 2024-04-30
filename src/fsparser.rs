@@ -3,8 +3,9 @@ use tz::UtcDateTime;
 use regex::Regex;
 
 use crate::{
+    boolean::Expr,
     fstok::Token,
-    fsexpr::{Expr,FsAtom,FsDate}
+    fsexpr::{FsAtom,FsDate}
 };
 
 impl Expr<FsAtom> {

@@ -2,35 +2,13 @@ use anyhow::Result;
 use tz::UtcDateTime;
 use regex::Regex;
 
-#[derive(Debug,Clone)]
-pub enum Expr<T> {
-    True,
-    False,
-    Atom(T),
-    And(Box<Expr<T>>,Box<Expr<T>>),
-    Or(Box<Expr<T>>,Box<Expr<T>>),
-    Diff(Box<Expr<T>>,Box<Expr<T>>),
-}
+use crate::boolean::Expr;
 
 #[derive(Copy,Clone,Debug)]
 pub struct FsDate {
     pub year:i32,
     pub month:i32,
     pub day:i32
-}
-
-impl FsDate {
-    pub fn to_timestamp(&self)->Result<i64> {
-	Ok(UtcDateTime::new(
-	    self.year,
-	    self.month as u8,
-	    self.day as u8,
-	    0,
-	    0,
-	    0,
-	    0)?
-	   .unix_time())
-    }
 }
 
 #[derive(Clone,Debug)]
@@ -43,6 +21,8 @@ pub enum FsAtom {
     Smaller(u64),
     Larger(u64)
 }
+
+pub type FsExpr = Expr<FsAtom>;
 
 pub struct FsDataGen<T> {
     // Drive ID
@@ -61,6 +41,21 @@ pub struct FsDataGen<T> {
     pub size:u64,
 }
 
+impl FsDate {
+    pub fn to_timestamp(&self)->Result<i64> {
+	Ok(UtcDateTime::new(
+	    self.year,
+	    self.month as u8,
+	    self.day as u8,
+	    0,
+	    0,
+	    0,
+	    0)?
+	   .unix_time())
+    }
+}
+
+
 impl<T> FsDataGen<T> {
     pub fn map<U,F:Fn(&T)->U>(&self,f:F)->FsDataGen<U> {
 	let &Self { drive,ref name,ref path,timestamp,size } = self;
@@ -78,19 +73,6 @@ pub type FsData<'a> = FsDataGen<&'a str>;
 
 pub trait Predicate {
     fn test(&self,data:&FsData)->bool;
-}
-
-impl<T> Expr<T> {
-    fn eval<F:Fn(&T)->bool>(&self,f:&F)->bool {
-	match self {
-	    Self::True => true,
-	    Self::False => false,
-	    Self::Atom(a) => f(a),
-	    Self::And(x,y) => x.eval(f) && y.eval(f),
-	    Self::Or(x,y) => x.eval(f) || y.eval(f),
-	    Self::Diff(x,y) => x.eval(f) && !y.eval(f)
-	}
-    }
 }
 
 impl FsAtom {
