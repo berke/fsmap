@@ -1,5 +1,6 @@
 use std::ffi::OsString;
-use anyhow::{Result};
+use anyhow::{bail,Result};
+use log::warn;
 
 use crate::{
     fsexpr::{FsData},
@@ -22,8 +23,15 @@ impl Action {
 }
 
 pub trait Watcher {
-    fn interrupted(&mut self)->Result<()> { Ok(()) }
-    fn device_not_found(&mut self,_dev:u64)->Result<()> { Ok(()) }
+    fn interrupted(&mut self)->Result<()> {
+	bail!("Interrupted");
+    }
+
+    fn device_not_found(&mut self,dev:u64)->Result<()> {
+	warn!("Cannot find device {}",dev);
+	Ok(())
+    }
+    
     fn enter_dir(&mut self,_name:&OsString)->Result<Action> { Ok(Action::Enter) }
     fn leave_dir(&mut self)->Result<()> { Ok(()) }
     fn enter_fs(&mut self,_i:usize,_fse:&FileSystemEntry)->Result<Action> {

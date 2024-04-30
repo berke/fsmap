@@ -16,6 +16,7 @@ mod fstok;
 mod fsmap;
 mod indent;
 mod limiter;
+mod list_printer;
 mod scanner;
 mod sigint_detector;
 mod valve;

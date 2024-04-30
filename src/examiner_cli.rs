@@ -3,11 +3,11 @@ use anyhow::{Result,bail};
 use crate::{
     basic_printer::BasicPrinter,
     dumper::Dumper,
-    entry_collector::EntryCollector,
     fsexpr::FsExpr,
     fsmap::*,
     indent::IndentMode,
     limiter::{Limiter,LimiterSettings},
+    list_printer::ListPrinter,
     sigint_detector::SigintDetector,
     watcher::Watcher
 };
@@ -67,7 +67,14 @@ impl ExaminerCli {
 	let u = u.trim();
 	if let Some((v,w)) = u.split_once(' ') {
 	    match v {
-		"list" | "ls" => self.process(w,EntryCollector::new())?.print(),
+		"list" | "ls" => {
+		    let bp = ListPrinter::new(false);
+		    let _ = self.process(w,bp)?;
+		},
+		"longlist" | "ll" => {
+		    let bp = ListPrinter::new(true);
+		    let _ = self.process(w,bp)?;
+		},
 		"tree" | "tr" => {
 		    let bp = BasicPrinter::new();
 		    let _ = self.process(w,bp)?;
