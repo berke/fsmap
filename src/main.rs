@@ -10,6 +10,8 @@ mod dumper;
 mod entry_collector;
 mod examiner_cli;
 mod fsexpr;
+mod fsparser;
+mod fstok;
 mod fsmap;
 mod indent;
 mod limiter;
