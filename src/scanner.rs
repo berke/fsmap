@@ -28,7 +28,8 @@ impl<W> Scanner<W> where W:Watcher {
 	}
     }
     
-    fn scan_entry(&mut self,mounts:&mut Mounts,path:&Path,e:&DirEntry)->Result<(Entry,OsString)> {
+    fn scan_entry(&mut self,mounts:&mut Mounts,path:&Path,e:&DirEntry)
+		  ->Result<(Entry,OsString)> {
 	let name = e.file_name();
 	let mut sub_path = PathBuf::new();
 	sub_path.push(path);
@@ -62,10 +63,10 @@ impl<W> Scanner<W> where W:Watcher {
 	    Ok(md) => {
 		let dev = md.dev();
 		if self.one_device &&
-		     self.device.map(|dev2| dev != dev2).unwrap_or(false) {
-		    return Ok(Entry::Error(
-			format!("Skip dev {} {:?}",dev,path)));
-		}
+		    self.device.map(|dev2| dev != dev2).unwrap_or(false) {
+			return Ok(Entry::Error(
+			    format!("Skip dev {} {:?}",dev,path)));
+		    }
 		self.device = Some(dev);
 		let mut dir = Directory::new(dev);
 		self.watcher.notify(path);
