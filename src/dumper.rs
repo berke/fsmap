@@ -82,15 +82,15 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 	    drive:self.idrive as u64,
 	    name:&nsl,
 	    path:&path,
-	    timestamp:0,
-	    size:0
+	    timestamp:None,
+	    size:None
 	};
 
 	match entry {
 	    &Entry::File(ino) => {
 		if let Some(fi) = device.get_inode(ino) {
-		    data.size = fi.size;
-		    data.timestamp = fi.unix_time();
+		    data.size = Some(fi.size);
+		    data.timestamp = Some(fi.unix_time());
 		} else {
 		    warn!("Inode {} not found",ino);
 		}
@@ -105,7 +105,7 @@ impl<'a,'b,'c,P,W> Dumper<'a,'b,'c,P,W> where P:Predicate,W:Watcher {
 	let show = self.pred.test(&data);
 	if show {
 	    self.matching_entries += 1;
-	    self.matching_bytes += data.size;
+	    self.matching_bytes += data.size.unwrap_or(0);
 	    action = self.watcher.matching_entry(
 		fse,
 		name,

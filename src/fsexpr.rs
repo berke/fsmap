@@ -35,10 +35,10 @@ pub struct FsDataGen<T> {
     pub path:T,
 
     // Timestamp (Unix)
-    pub timestamp:i64,
+    pub timestamp:Option<i64>,
 
     // Size (bytes)
-    pub size:u64,
+    pub size:Option<u64>,
 }
 
 impl FsDate {
@@ -81,10 +81,10 @@ impl FsAtom {
 	    &Self::Drive(x) => data.drive == x,
 	    Self::PathMatch(rx) => rx.is_match(data.path),
 	    Self::NameMatch(rx) => rx.is_match(data.name),
-	    &Self::Smaller(x) => data.size <= x,
-	    &Self::Larger(x) => x <= data.size,
-	    &Self::Before(x) => data.timestamp <= x,
-	    &Self::After(x) => x <= data.timestamp,
+	    &Self::Smaller(x) => data.size.map(|s| s <= x).unwrap_or(false),
+	    &Self::Larger(x) => data.size.map(|s| x <= s).unwrap_or(false),
+	    &Self::Before(x) => data.timestamp.map(|t| t <= x).unwrap_or(false),
+	    &Self::After(x) => data.timestamp.map(|t| x <= t).unwrap_or(false),
 	}
     }
 }

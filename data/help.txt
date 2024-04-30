@@ -28,6 +28,10 @@ Commands
     Use u for unlimited
   drives
     List the "drives" (i.e. file system maps) that are loaded
+  counts
+    Report total matched bytes and entry counts
+  nocounts
+    Don't report the above
   quit
 
 Expression syntax
