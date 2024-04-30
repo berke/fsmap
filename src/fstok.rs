@@ -104,7 +104,7 @@ impl Token {
     }
 
     fn parse_i32(u:&[char])->Result<i32> {
-	let v : String = u.into_iter().collect();
+	let v : String = u.iter().collect();
 	Ok(v.parse()?)
     }
 
@@ -160,7 +160,7 @@ impl Token {
 	let mut res = Vec::new();
 	let mut u = &chars[..];
 	loop {
-	    let (token,rest) = Self::eat(&u)?;
+	    let (token,rest) = Self::eat(u)?;
 	    if let Token::Eof = token {
 		break;
 	    }

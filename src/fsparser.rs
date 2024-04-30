@@ -37,9 +37,9 @@ impl Expr<FsAtom> {
 	    [Token::Larger,Token::Unsigned(x),rest @ ..] =>
 		Ok((Expr::Atom(FsAtom::Larger(*x)),rest)),
 	    [Token::Before,Token::Date(d),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::Before(d.to_timestamp()?)),rest)),
+		Ok((Expr::Atom(FsAtom::Before(d.timestamp()?)),rest)),
 	    [Token::After,Token::Date(d),rest @ ..] =>
-		Ok((Expr::Atom(FsAtom::After(d.to_timestamp()?)),rest)),
+		Ok((Expr::Atom(FsAtom::After(d.timestamp()?)),rest)),
 	    [Token::Name,Token::Str(u),rest @ ..] => {
 		let rex = Regex::new(u)?;
 		Ok((Expr::Atom(FsAtom::NameMatch(rex)),rest))

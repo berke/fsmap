@@ -42,7 +42,7 @@ pub struct FsDataGen<T> {
 }
 
 impl FsDate {
-    pub fn to_timestamp(&self)->Result<i64> {
+    pub fn timestamp(&self)->Result<i64> {
 	Ok(UtcDateTime::new(
 	    self.year,
 	    self.month as u8,

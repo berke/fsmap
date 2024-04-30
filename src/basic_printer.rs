@@ -57,14 +57,13 @@ impl<'a> BasicPrinter<'a> {
 	    if !match_so_far {
 		print!("{:21} ","   ");
 		self.put_indent(i);
-		match c2[i] {
-		    Component::Normal(u) => println!("{}/",u.to_string_lossy()),
-		    _ => ()
+		if let Component::Normal(u) = c2[i] {
+		    println!("{}/",u.to_string_lossy());
 		}
 	    }
 	}
 	if !match_so_far {
-	    self.last_dir = self.dir.clone();
+	    self.last_dir.clone_from(&self.dir);
 	}
 	Ok(())
     }
