@@ -1,7 +1,7 @@
 use anyhow::{Result,bail};
 use pico_args::Arguments;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path,PathBuf};
 use log::{self,info,warn,LevelFilter};
 use rustyline as rl;
 
@@ -57,12 +57,12 @@ fn collect(mut args:Arguments)->Result<()> {
 }
 
 fn help(_args:Arguments)->Result<()> {
-    println!("{}",help::COMMAND_TEXT);
+    print!("{}",help::COMMAND_TEXT);
     Ok(())
 }
 
 fn help_expr(_args:Arguments)->Result<()> {
-    println!("{}",help::EXPR_TEXT);
+    print!("{}",help::EXPR_TEXT);
     Ok(())
 }
 
@@ -82,8 +82,9 @@ fn dump(mut args:Arguments)->Result<()> {
     Ok(())
 }
 
-fn examine(args:Arguments)->Result<()> {
+fn examine(mut args:Arguments)->Result<()> {
     info!("Loading inputs");
+    let enable_history = !args.contains("--no-history");
     let inputs = args.finish();
     let (fss,errs) = FileSystems::load_multiple(&inputs[..]);
     for (path,err) in &errs {
@@ -94,9 +95,16 @@ fn examine(args:Arguments)->Result<()> {
     let config = rl::config::Config::builder()
 	.auto_add_history(true)
 	.build();
-    let mut rl : rl::Editor<(),_> =
+    let mut rl : rl::Editor<(),rl::history::FileHistory> =
 	rl::Editor::with_config(config)?;
-    let _ = rl.load_history(".fsmap-hist");
+    let mut hist_path = PathBuf::new();
+    if let Some(home) = std::env::var_os("HOME") {
+	hist_path.push(home);
+    }
+    hist_path.push(".fsmap-hist");
+    if enable_history {
+	let _ = rl.load_history(&hist_path);
+    }
 
     loop {
 	match rl.readline("> ") {
@@ -109,6 +117,10 @@ fn examine(args:Arguments)->Result<()> {
 		Err(e) => eprintln!("Error: {}",e)
 	    }
 	}
+    }
+
+    if enable_history {
+	let _ = rl.append_history(&hist_path);
     }
     std::process::exit(0)
 }

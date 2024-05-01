@@ -1,10 +1,14 @@
-collect [--one-device] --out OUT PATH
+Invocation
+==========
+fsexpr collect [--one-device] --out OUT PATH
   Scan files under PATH (skipping other devices if --one-device is
   provided) and write a file system map into OUT
 
-dump [--expr EXPR] MAP1 MAP2 ... MAPN
+fsexpr dump [--expr EXPR] MAP1 MAP2 ... MAPN
   Load the file system maps MAP1, ..., MAPN and list their entries,
   retricting the results to the expression EXPR if provided.
 
-examine MAP1 MAP2 ... MAPN
+fsexpr examine [--no-history] MAP1 MAP2 ... MAPN
   Load the file system maps and run an interactive CLI
+  Unless the --no-history option is present, command-line history
+  will be saved to ~/.fsmap-hist

@@ -88,6 +88,9 @@ Examples:
 
 You can ^C in the middle of a listing to get back to the prompt.
 
+Command line history is saved into `~/.fsmap-hist` unless the option
+`--no-history` is provided.
+
 ## Performance
 
 The map files have no index of any kind (except for the per-device

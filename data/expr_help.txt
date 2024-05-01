@@ -1,6 +1,5 @@
 Expression syntax
 =================
-
 REGEX
   Matches the full path of the entry against the regular expression,
   where REGEX is a regular expression excluding characters such as

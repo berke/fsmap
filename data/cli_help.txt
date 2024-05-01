@@ -2,6 +2,7 @@ Interactive commands
 ====================
   list EXPR      ls EXPR
     Find entries matching EXPR and display them as a raw list
+    If EXPR is omitted, all entries will be displayed.
   longlist EXPR  lls EXPR
     Same as above, but display details
   tree EXPR      tr EXPR

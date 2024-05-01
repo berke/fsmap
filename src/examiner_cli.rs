@@ -31,7 +31,12 @@ impl ExaminerCli {
 
     fn process<W:Watcher>(&mut self,w:&str,watcher:W)->Result<W> {
 	let sd = SigintDetector::new();
-	let expr = FsExpr::parse(w)?;
+	let expr =
+	    if w.is_empty() {
+		FsExpr::True
+	    } else {
+		FsExpr::parse(w)?
+	    };
 	let lim = Limiter::new(&self.limiter,watcher);
 	let mut dp = Dumper::new(&sd,&self.fss,&expr,lim);
 	match dp.dump() {
@@ -65,55 +70,58 @@ impl ExaminerCli {
 
     pub fn handle_input(&mut self,u:&str)->Result<bool> {
 	let u = u.trim();
-	if let Some((v,w)) = u.split_once(' ') {
-	    match v {
-		"list" | "ls" => {
-		    let bp = ListPrinter::new(false);
-		    let _ = self.process(w,bp)?;
-		},
-		"longlist" | "ll" => {
-		    let bp = ListPrinter::new(true);
-		    let _ = self.process(w,bp)?;
-		},
-		"tree" | "tr" => {
-		    let bp = BasicPrinter::new();
-		    let _ = self.process(w,bp)?;
-		},
-		"ntree" | "ntr" => {
-		    let mut bp = BasicPrinter::new();
-		    bp.set_indent_mode(IndentMode::Numbered);
-		    let _ = self.process(w,bp)?;
-		},
-		"maxdepth" | "maxd" =>
-		    Self::set_limit(w,&mut self.limiter.max_depth)?,
-		"maxbreadth" | "maxb" =>
-		    Self::set_limit(w,&mut self.limiter.max_breadth)?, 
-		"maxent" | "maxe" =>
-		    Self::set_limit(w,&mut self.limiter.max_entries)?,
-		_ => bail!("Unknown command"),
-	    }
-	} else {
-	    match u {
-		"drives" => {
-		    println!("Drives:");
-		    for (idrive,FileSystemEntry { origin,.. }) in
-			self.fss.systems.iter().enumerate() {
-			    println!("  {:3} {:?}",
-				     idrive,
-				     origin);
-			}
-		},
-		"counts" => self.show_counts = true,
-		"nocounts" => self.show_counts = false,
-		"maxdepth?" | "maxd?" => self.show_limit(self.limiter.max_depth),
-		"maxbreadth?" | "maxb?" => self.show_limit(self.limiter.max_breadth),
-		"maxent?" | "maxe?" => self.show_limit(self.limiter.max_entries),
-		"quit" => return Ok(true),
-		"help" | "h" => println!("{}",help::CLI_TEXT),
-		"help-expr" | "he" => println!("{}",help::EXPR_TEXT),
-		"" => (),
-		_ => bail!("Unknown command with no arguments")
-	    }
+	let (v,w) =
+	    u.split_once(' ')
+	    .unwrap_or((u,""));
+	match v {
+	    "list" | "ls" => {
+		let bp = ListPrinter::new(false);
+		let _ = self.process(w,bp)?;
+	    },
+	    "longlist" | "ll" => {
+		let bp = ListPrinter::new(true);
+		let _ = self.process(w,bp)?;
+	    },
+	    "tree" | "tr" => {
+		let bp = BasicPrinter::new();
+		let _ = self.process(w,bp)?;
+	    },
+	    "ntree" | "ntr" => {
+		let mut bp = BasicPrinter::new();
+		bp.set_indent_mode(IndentMode::Numbered);
+		let _ = self.process(w,bp)?;
+	    },
+	    "maxdepth" | "maxd" =>
+		Self::set_limit(w,&mut self.limiter.max_depth)?,
+	    "maxbreadth" | "maxb" =>
+		Self::set_limit(w,&mut self.limiter.max_breadth)?, 
+	    "maxent" | "maxe" =>
+		Self::set_limit(w,&mut self.limiter.max_entries)?,
+	    "drives" => {
+		println!("Drives:");
+		for (idrive,FileSystemEntry { origin,.. }) in
+		    self.fss.systems.iter().enumerate() {
+			println!("  {:3} {:?}",
+				 idrive,
+				 origin);
+		    }
+	    },
+	    "counts" => {
+		self.show_counts = true;
+		println!("Will show counts");
+	    },
+	    "nocounts" => {
+		self.show_counts = false;
+		println!("Won't show counts");
+	    },
+	    "maxdepth?" | "maxd?" => self.show_limit(self.limiter.max_depth),
+	    "maxbreadth?" | "maxb?" => self.show_limit(self.limiter.max_breadth),
+	    "maxent?" | "maxe?" => self.show_limit(self.limiter.max_entries),
+	    "quit" => return Ok(true),
+	    "help" | "h" => print!("{}",help::CLI_TEXT),
+	    "help-expr" | "he" => print!("{}",help::EXPR_TEXT),
+	    "" => (),
+	    _ => bail!("Unknown command")
 	}
 	Ok(false)
     }
