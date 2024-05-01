@@ -8,7 +8,6 @@ mod basic_printer;
 mod boolean;
 mod counter;
 mod dumper;
-mod entry_collector;
 mod examiner_cli;
 mod fsexpr;
 mod fsparser;
