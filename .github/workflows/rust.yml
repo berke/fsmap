@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "berke/testwf" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "berke/testwf" ]
   workflow_dispatch:
 
 env:
