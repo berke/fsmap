@@ -2,7 +2,7 @@ use anyhow::{Result,bail};
 use pico_args::Arguments;
 use std::ffi::OsString;
 use std::path::Path;
-use log::{self,info,warn};
+use log::{self,info,warn,LevelFilter};
 
 mod basic_printer;
 mod boolean;
@@ -113,7 +113,10 @@ fn examine(args:Arguments)->Result<()> {
 
 fn main()->Result<()> {
     let mut args = Arguments::from_env();
-    env_logger::Builder::from_env("FSMAP_LOG").init();
+    env_logger::Builder::new()
+	.filter_level(LevelFilter::Info)
+	.parse_env("FSMAP_LOG")
+	.init();
 
     type Command = Box<dyn Fn(Arguments)->Result<()>>;
 
