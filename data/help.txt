@@ -1,70 +1,10 @@
-Commands
-========
-  list EXPR
-  ls EXPR
-    Find entries matching EXPR and display them as a raw list
-  tree EXPR
-  tr EXPR
-    Same as above, but display them in indented tree form
-  ntree EXPR
-  ntr EXPR
-    Same as above, but display indentation levels as numbers
-  maxe N
-  maxent N
-    Set a limit on the maximum number of matching entries to be
-    displayed per directory.
+collect [--one-device] --out OUT PATH
+  Scan files under PATH (skipping other devices if --one-device is
+  provided) and write a file system map into OUT
 
-    Use u for unlimited
-  maxd N
-  maxdepth N
-    Set a limit of N on the maximum depth of search
+dump [--expr EXPR] MAP1 MAP2 ... MAPN
+  Load the file system maps MAP1, ..., MAPN and list their entries,
+  retricting the results to the expression EXPR if provided.
 
-    Use u for unlimited
-  maxb N
-  maxbreadth N
-    Set a limit of N on th maximum breadh of search N (i.e. no
-    more than N subdirectories of a given directory will be explored)
-
-    Use u for unlimited
-  drives
-    List the "drives" (i.e. file system maps) that are loaded
-  counts
-    Report total matched bytes and entry counts
-  nocounts
-    Don't report the above
-  quit
-
-Expression syntax
-=================
-
-REGEX
-  Matches the full path of the entry against the regular expression,
-  where REGEX is a regular expression excluding characters such as
-  spaces and single quotes
-'REGEX'
-  Quoted regular expression, allowing arbitrary characters to be used
-  Use \' and \\ for quoting single quotes and backslashes, respectively
-EXPR1 \ EXPR2
-  Returns entries that match EXPR1 but not EXPR2 (highest priority)
-EXPR1 & EXPR2
-  Returns entries that match both EXPR1 and EXPR2, higher priority
-EXPR1 | EXPR2
-  Returns entries that match either EXPR1 or EXPR2 (lowest priority)
-( EXPR )
-  For grouping expressions
-%t
-  True, matches all entries
-%f
-  False, matches no entry
-%before DATE
-  Matches files with a timestamp before DATE, where date is YYYY-MM-DD
-%after DATE
-  Same as above, but with a timestamp after DATE
-%larger N
-  Matches files larger than or equal to N bytes.  Suffixes k, M and G stand for
-  base 2 kilobytes, megabytes and gigabytes, sometimes written
-  MiB, kiB and GiB
-%smaller N
-  Save as bove, but find files with a size smaller than or equal to N bytes
-%drive K
-  Limits results to those on "drive" number K
+examine MAP1 MAP2 ... MAPN
+  Load the file system maps and run an interactive CLI

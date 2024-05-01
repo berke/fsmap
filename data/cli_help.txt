@@ -1,0 +1,36 @@
+Interactive commands
+====================
+  list EXPR      ls EXPR
+    Find entries matching EXPR and display them as a raw list
+  longlist EXPR  lls EXPR
+    Same as above, but display details
+  tree EXPR      tr EXPR
+    Same as above, but display them in indented tree form
+  ntree EXPR     ntr EXPR
+    Same as above, but display indentation levels as numbers
+  maxe N         maxent N
+    Set a limit on the maximum number of matching entries to be
+    displayed per directory.
+
+    Use u for unlimited
+  maxd N         maxdepth N
+    Set a limit of N on the maximum depth of search
+
+    Use u for unlimited
+  maxb N         maxbreadth N
+    Set a limit of N on th maximum breadh of search N (i.e. no
+    more than N subdirectories of a given directory will be explored)
+
+    Use u for unlimited
+  drives
+    List the "drives" (i.e. file system maps) that are loaded
+  counts
+    Report total matched bytes and entry counts
+  nocounts
+    Don't report the above
+  quit
+    Quit
+  help          h
+    Display this help
+  help-expr     he
+    Display expression syntax

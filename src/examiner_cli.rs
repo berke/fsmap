@@ -5,6 +5,7 @@ use crate::{
     dumper::Dumper,
     fsexpr::FsExpr,
     fsmap::*,
+    help,
     indent::IndentMode,
     limiter::{Limiter,LimiterSettings},
     list_printer::ListPrinter,
@@ -18,7 +19,6 @@ pub struct ExaminerCli {
     show_counts:bool
 }
 
-const HELP_TEXT : &str = include_str!("../data/help.txt");
 
 impl ExaminerCli {
     pub fn new(fss:FileSystems)->Self {
@@ -109,7 +109,8 @@ impl ExaminerCli {
 		"maxbreadth?" | "maxb?" => self.show_limit(self.limiter.max_breadth),
 		"maxent?" | "maxe?" => self.show_limit(self.limiter.max_entries),
 		"quit" => std::process::exit(0),
-		"help" => print!("{}",HELP_TEXT),
+		"help" | "h" => println!("{}",help::CLI_TEXT),
+		"help-expr" | "he" => println!("{}",help::EXPR_TEXT),
 		"" => (),
 		_ => bail!("Unknown command with no arguments")
 	    }

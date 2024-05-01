@@ -14,6 +14,7 @@ mod fsexpr;
 mod fsparser;
 mod fstok;
 mod fsmap;
+mod help;
 mod indent;
 mod limiter;
 mod list_printer;
@@ -31,12 +32,15 @@ use dumper::Dumper;
 use scanner::Scanner;
 use sigint_detector::SigintDetector;
 
-fn collect(mut pargs:Arguments)->Result<()> {
-    let path_os : OsString = pargs.value_from_str("--path")?;
-    let out : OsString = pargs.value_from_str("--out")?;
-    let one_device : bool = pargs.contains("--one-device");
+fn collect(mut args:Arguments)->Result<()> {
+    let out : OsString = args.value_from_str("--out")?;
+    let one_device : bool = args.contains("--one-device");
+    let paths : Vec<OsString> = args.finish();
+    if paths.len() != 1 {
+	bail!("Exactly one path must be given to collect");
+    }
+    let path = Path::new(&paths[0]);
     let mut mounts = Mounts::new();
-    let path = Path::new(&path_os);
     let counter = Counter::new();
     let mut scanner = Scanner::new(counter,one_device);
     let fs =
@@ -52,8 +56,18 @@ fn collect(mut pargs:Arguments)->Result<()> {
     Ok(())
 }
 
+fn help(_args:Arguments)->Result<()> {
+    println!("{}",help::COMMAND_TEXT);
+    Ok(())
+}
+
+fn help_expr(_args:Arguments)->Result<()> {
+    println!("{}",help::EXPR_TEXT);
+    Ok(())
+}
+
 fn dump(mut args:Arguments)->Result<()> {
-    let expr : String = args.opt_value_from_str("--pred")?
+    let expr : String = args.opt_value_from_str("--expr")?
 	.unwrap_or_else(|| "%t".to_string());
     let expr = FsExpr::parse(&expr)?;
     let inputs = args.finish();
@@ -107,6 +121,8 @@ fn main()->Result<()> {
 	("collect",Box::new(collect)),
 	("dump",Box::new(dump)),
 	("examine",Box::new(examine)),
+	("help",Box::new(help)),
+	("help-expr",Box::new(help_expr))
     ];
 
     match args.subcommand()?

@@ -1,0 +1,34 @@
+Expression syntax
+=================
+
+REGEX
+  Matches the full path of the entry against the regular expression,
+  where REGEX is a regular expression excluding characters such as
+  spaces and single quotes
+'REGEX'
+  Quoted regular expression, allowing arbitrary characters to be used
+  Use \' and \\ for quoting single quotes and backslashes, respectively
+EXPR1 \ EXPR2
+  Returns entries that match EXPR1 but not EXPR2 (highest priority)
+EXPR1 & EXPR2
+  Returns entries that match both EXPR1 and EXPR2, higher priority
+EXPR1 | EXPR2
+  Returns entries that match either EXPR1 or EXPR2 (lowest priority)
+( EXPR )
+  For grouping expressions
+%t
+  True, matches all entries
+%f
+  False, matches no entry
+%before DATE
+  Matches files with a timestamp before DATE, where date is YYYY-MM-DD
+%after DATE
+  Same as above, but with a timestamp after DATE
+%larger N
+  Matches files larger than or equal to N bytes.  Suffixes k, M and G stand for
+  base 2 kilobytes, megabytes and gigabytes, sometimes written
+  MiB, kiB and GiB
+%smaller N
+  Save as bove, but find files with a size smaller than or equal to N bytes
+%drive K
+  Limits results to those on "drive" number K
