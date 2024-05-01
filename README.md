@@ -21,15 +21,30 @@ File content digests are not included.
 
 ## Status
 
-Indexing works well but the search functionality is primitive.
+Indexing works well, search functionality is OK, memory consumption
+and load times are a bit high.
 
 ## Use cases
 
-Suppose you have half a dozen removable external hard drives with
-mostly static contents.  You create a map for each of them and keep
-them on your computer, so that you can search their contents without
-having to plug each drive.  Searches go also much faster than using
-e.g. find on a live filesystem.
+Suppose you never got around to setting up that fancy RAID NAS with
+ZFS and indexing and snapshots.  Instead, your drawers contain half a
+dozen hard disk drives with mostly static contents.
+
+Where did you put that particular file from five years ago?
+
+Yes you did run `find /mnt/my-twelfth-drive >index12`
+but that gives you no date information, no size information,
+and grepping that isn't very convenient.
+
+This tool provides a solution.
+
+You create a map for each drive and keep them on your computer, so
+that you can search their contents without having to plug each drive
+in.
+
+Searches go also much faster than using e.g. find on a live
+filesystem, and you can search by date, file size, and use
+boolean operators.
 
 ## Usage
 
@@ -37,15 +52,15 @@ e.g. find on a live filesystem.
 
 To create a map:
 
-`fsmap collect --path /path/to/my/filesystem --out filesystem.mpk`
+`fsmap collect --out filesystem.mpk /path/to/my/filesystem`
 
 To restrict the map to the first filesystem encountered, add `--one-device`
 
 ### Listing
 
-To dump the map:
+To dump the map (with an optional filtering expression `EXPR`):
 
-`fsmap dump --path /path/to/my/filesystem --in filesystem.mpk`
+`fsmap dump [--expr EXPR] filesystem.mpk`
 
 ## Interactive mode
 
@@ -54,7 +69,7 @@ To interactively examine the map, type:
 `fsmap examine filesystem1.mpk filesystem2.mpk ...`
 
 Use `ls EXPR` to list entries matching `EXPR`.  Type `help`
-to get a list of commands.
+to get a list of other commands.
 
 Regular expressions are processed using the excellent [regex](
 https://docs.rs/regex/1.10.4/regex/index.html#syntax) crate.
@@ -77,8 +92,8 @@ You can ^C in the middle of a listing to get back to the prompt.
 
 The map files have no index of any kind (except for the per-device
 inode maps); fsmap will just gobble up everything and hold it in
-memory.  This can amount to many gigabytes.  Search performance is sufficient
-for my present needs.
+memory.  This can amount to many gigabytes.  Search performance is
+sufficient for my present needs.
 
 The indices are quite large, but can be significantly compressed in my
 tests down to 1/6th the original size using `xz`, while other tools provide
@@ -104,14 +119,30 @@ Paged output.
 Adding variables to the command language is tempting, but it's also
 hard to avoid producing yet another crappy programming language.
 
-## Rant about Signals
+## Important third-party crates
 
-To detect ^C I ended up writing the 67 line `sigint_detector.rs` module
-but only after spending a good afternoon trying to get `signal_hook` to
-work, only to realize in horror that it totaled more than 3000 lines...
-I don't miss dealing with `malloc()` and `strlen()` and consorts, but
-I do miss the nice Unix module of OCaml (which probably even works under
-Windows for most things.)
+This tool uses the following important crates:
+
+- `regex` for regular expressions
+- `serde` and `rmp_serde` for MPK serialization and deserialization
+- `rustyline` for command-line parsing
+
+## Rant about signals
+
+To detect ^C I ended up writing the 67 line `sigint_detector.rs`
+module but only after spending a good afternoon trying read through
+`signal_hook` to understand why ^C wasn't working.  It wasn't
+`signal_hook`'s fault but I realized in horror that it totaled more
+than 3000 lines, just to catch a signal...  come on now, I'm not
+saying there can't be a use case for gold-plated, cross-platform,
+thread and data race safe signal handling but I just want to catch
+a ctrl-C and be able to figure out what's happening so that I can
+debug it without getting lost in a maze of two crates and thousands
+of lines.  This is getting ridiculous.
+
+I don't miss the old C days of dealing with `malloc()` and `strlen()`
+and consorts, but I do miss the nice Unix module of OCaml (which
+probably even works under Windows for most things.)
 
 ## Compatibility
 

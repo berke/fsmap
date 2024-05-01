@@ -108,7 +108,7 @@ impl ExaminerCli {
 		"maxdepth?" | "maxd?" => self.show_limit(self.limiter.max_depth),
 		"maxbreadth?" | "maxb?" => self.show_limit(self.limiter.max_breadth),
 		"maxent?" | "maxe?" => self.show_limit(self.limiter.max_entries),
-		"quit" => std::process::exit(0),
+		"quit" => return Ok(true),
 		"help" | "h" => println!("{}",help::CLI_TEXT),
 		"help-expr" | "he" => println!("{}",help::EXPR_TEXT),
 		"" => (),

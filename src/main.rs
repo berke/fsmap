@@ -3,6 +3,7 @@ use pico_args::Arguments;
 use std::ffi::OsString;
 use std::path::Path;
 use log::{self,info,warn,LevelFilter};
+use rustyline as rl;
 
 mod basic_printer;
 mod boolean;
@@ -90,24 +91,26 @@ fn examine(args:Arguments)->Result<()> {
     }
     let mut cli = ExaminerCli::new(fss);
 
-    let config = rustyline::config::Config::builder()
+    let config = rl::config::Config::builder()
 	.auto_add_history(true)
 	.build();
-    let mut rl : rustyline::Editor<(),_> = rustyline::Editor::with_config(config)?;
+    let mut rl : rl::Editor<(),_> =
+	rl::Editor::with_config(config)?;
     let _ = rl.load_history(".fsmap-hist");
 
     loop {
-	match rl.readline("> ")
-	    .map_err(|e| e.into())
-	    .and_then(|u| {
-		cli.handle_input(u.as_str())
-	    }) {
+	match rl.readline("> ") {
+	    Err(rl::error::ReadlineError::Eof) => break,
+	    Err(rl::error::ReadlineError::Interrupted) => println!("^C"),
+	    Err(e) => eprintln!("Error: {}",e),
+	    Ok(u) => match cli.handle_input(u.as_str()) {
 		Ok(true) => break,
 		Ok(false) => (),
-		Err(e) => eprintln!("ERR: {}",e)
+		Err(e) => eprintln!("Error: {}",e)
+	    }
 	}
     }
-    Ok(())
+    std::process::exit(0)
 }
 
 fn main()->Result<()> {
