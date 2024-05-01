@@ -57,6 +57,7 @@ impl FsDate {
 
 
 impl<T> FsDataGen<T> {
+    #[allow(dead_code)]
     pub fn map<U,F:Fn(&T)->U>(&self,f:F)->FsDataGen<U> {
 	let &Self { drive,ref name,ref path,timestamp,size } = self;
 	FsDataGen {

@@ -1,4 +1,5 @@
 pub enum IndentMode {
+    #[allow(dead_code)]
     None,
     Numbered,
     Spaces
